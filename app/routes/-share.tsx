@@ -304,6 +304,12 @@ export default function SharePage() {
   );
 
   const canComment = Boolean(userId || guest);
+  const reactions = useQuery(
+    api.comments.getReactionsForVideo,
+    videoData?.video?._id
+      ? { videoId: videoData.video._id as Id<"videos"> }
+      : "skip",
+  );
 
   const isBootstrappingShare =
     shareInfo === undefined ||
@@ -404,10 +410,6 @@ export default function SharePage() {
   }
 
   const video = videoData.video;
-  const reactions = useQuery(
-    api.comments.getReactionsForVideo,
-    video?._id ? { videoId: video._id as Id<"videos"> } : "skip",
-  );
   const userIdentifier = userId ?? guest?.guestId ?? "";
   const userName = userId ? "You" : (guest?.name ?? "");
 

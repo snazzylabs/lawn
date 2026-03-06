@@ -248,6 +248,12 @@ export default function WatchPage() {
   );
 
   const canComment = Boolean(userId || guest);
+  const reactions = useQuery(
+    api.comments.getReactionsForVideo,
+    videoData?.video?._id
+      ? { videoId: videoData.video._id as Id<"videos"> }
+      : "skip",
+  );
 
   if (videoData === undefined) {
     return (
@@ -281,10 +287,6 @@ export default function WatchPage() {
   }
 
   const video = videoData.video;
-  const reactions = useQuery(
-    api.comments.getReactionsForVideo,
-    video?._id ? { videoId: video._id as Id<"videos"> } : "skip",
-  );
   const userIdentifier = userId ?? guest?.guestId ?? "";
   const userName = userId ? "You" : (guest?.name ?? "");
 
