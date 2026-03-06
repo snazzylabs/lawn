@@ -1,5 +1,5 @@
 
-import { useConvex, useMutation } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -124,11 +124,25 @@ export default function TeamPage() {
   const { context, team, projects } = useTeamData({ teamSlug });
   const createProject = useMutation(api.projects.create);
   const deleteProject = useMutation(api.projects.remove);
+  const purgeInactiveProjects = useMutation(api.projects.purgeInactiveForTeam);
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
+  const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [purgeWindowDays, setPurgeWindowDays] = useState(180);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+
+  const canManageMembers = team?.role === "owner" || team?.role === "admin";
+  const canCreateProject = team?.role !== "viewer";
+
+  const inactiveProjectStats = useQuery(
+    api.projects.countInactiveForTeam,
+    purgeDialogOpen && canManageMembers && team
+      ? { teamId: team._id, olderThanDays: purgeWindowDays }
+      : "skip",
+  );
 
   const shouldCanonicalize =
     !!context && !context.isCanonical && pathname !== context.canonicalPath;
@@ -182,8 +196,37 @@ export default function TeamPage() {
     }
   };
 
-  const canManageMembers = team?.role === "owner" || team?.role === "admin";
-  const canCreateProject = team?.role !== "viewer";
+  const handlePurgeOldProjects = async () => {
+    if (!team) return;
+    const count = inactiveProjectStats?.count ?? 0;
+    if (count === 0) return;
+
+    const proceed = confirm(
+      `Permanently delete ${count} inactive project${count === 1 ? "" : "s"} older than ${purgeWindowDays} days?`,
+    );
+    if (!proceed) return;
+
+    setIsPurging(true);
+    try {
+      const result = await purgeInactiveProjects({
+        teamId: team._id,
+        olderThanDays: purgeWindowDays,
+        limit: 200,
+      });
+      const skipped =
+        result.candidateCount > result.purgedCount
+          ? ` ${result.candidateCount - result.purgedCount} additional project${result.candidateCount - result.purgedCount === 1 ? "" : "s"} remain and can be purged in another pass.`
+          : "";
+      alert(
+        `Purged ${result.purgedCount} inactive project${result.purgedCount === 1 ? "" : "s"}.${skipped}`,
+      );
+      setPurgeDialogOpen(false);
+    } catch (error) {
+      console.error("Failed to purge inactive projects:", error);
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -202,6 +245,15 @@ export default function TeamPage() {
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="sm:mr-1.5 h-4 w-4" />
             <span className="hidden sm:inline">New project</span>
+          </Button>
+        )}
+        {canManageMembers && (
+          <Button
+            variant="outline"
+            onClick={() => setPurgeDialogOpen(true)}
+          >
+            <Trash2 className="sm:mr-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">Purge old projects</span>
           </Button>
         )}
       </DashboardHeader>
@@ -287,6 +339,60 @@ export default function TeamPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={purgeDialogOpen} onOpenChange={setPurgeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Purge old projects</DialogTitle>
+            <DialogDescription>
+              Permanently delete projects with no activity in the selected window.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <label
+              htmlFor="purge-window-days"
+              className="text-sm font-medium text-[#1a1a1a]"
+            >
+              Inactive longer than
+            </label>
+            <select
+              id="purge-window-days"
+              value={String(purgeWindowDays)}
+              onChange={(event) => setPurgeWindowDays(Number(event.target.value))}
+              className="h-10 w-full border border-[#d8d8d0] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#c5c5bc]"
+            >
+              <option value="90">90 days</option>
+              <option value="180">180 days</option>
+              <option value="365">365 days</option>
+              <option value="730">730 days</option>
+            </select>
+            <div className="rounded-md border border-[#d8d8d0] bg-[#f8f8f4] px-3 py-2 text-sm text-[#3d3d36]">
+              {inactiveProjectStats
+                ? `${inactiveProjectStats.count} project${inactiveProjectStats.count === 1 ? "" : "s"} currently match this window.`
+                : "Loading project count..."}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPurgeDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isPurging || !inactiveProjectStats || inactiveProjectStats.count === 0}
+              onClick={handlePurgeOldProjects}
+            >
+              {isPurging
+                ? "Purging..."
+                : `Purge ${inactiveProjectStats?.count ?? 0} project${(inactiveProjectStats?.count ?? 0) === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

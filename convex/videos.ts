@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
-import { identityName, requireProjectAccess, requireVideoAccess } from "./auth";
+import { getUser, identityName, requireProjectAccess, requireVideoAccess } from "./auth";
 import { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { generateUniqueToken } from "./security";
@@ -20,8 +20,101 @@ type WorkflowStatus =
   | "rework"
   | "done";
 
+function formatApproverName(
+  name: string,
+  company?: string,
+) {
+  const normalizedName = name.trim() || "Someone";
+  const normalizedCompany = company?.trim();
+  return normalizedCompany
+    ? `${normalizedName} (${normalizedCompany})`
+    : normalizedName;
+}
+
+async function notifyFinalCutApproved(
+  ctx: MutationCtx,
+  args: {
+    teamId: Id<"teams">;
+    projectId: Id<"projects">;
+    videoId: Id<"videos">;
+    videoTitle: string;
+    approverName: string;
+    approverCompany?: string;
+  },
+) {
+  const actor = formatApproverName(args.approverName, args.approverCompany);
+  await ctx.db.insert("notifications", {
+    teamId: args.teamId,
+    projectId: args.projectId,
+    videoId: args.videoId,
+    type: "final_cut_approved",
+    message: `${actor} approved final cut on "${args.videoTitle}". Ready for publishing.`,
+    read: false,
+    createdAt: Date.now(),
+  });
+}
+
+async function approveFinalCutInternal(
+  ctx: MutationCtx,
+  args: {
+    videoId: Id<"videos">;
+    approverName: string;
+    approverCompany?: string;
+  },
+) {
+  const video = await ctx.db.get(args.videoId);
+  if (!video) {
+    throw new Error("Video not found");
+  }
+
+  if (!video.isFinalProof) {
+    throw new Error("Final approval is only available for Final Proof videos.");
+  }
+
+  if (video.finalCutApprovedAt) {
+    return {
+      ok: true as const,
+      alreadyApproved: true,
+      approvedAt: video.finalCutApprovedAt,
+    };
+  }
+
+  const project = await ctx.db.get(video.projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  const now = Date.now();
+  const approver = args.approverName.trim() || "Someone";
+  await ctx.db.patch(video._id, {
+    workflowStatus: "done",
+    finalCutApprovedAt: now,
+    finalCutApprovedByName: approver,
+  });
+
+  await notifyFinalCutApproved(ctx, {
+    teamId: project.teamId,
+    projectId: project._id,
+    videoId: video._id,
+    videoTitle: video.title,
+    approverName: approver,
+    approverCompany: args.approverCompany,
+  });
+  await touchProjectActivity(ctx, project._id);
+
+  return {
+    ok: true as const,
+    alreadyApproved: false,
+    approvedAt: now,
+  };
+}
+
 function normalizeWorkflowStatus(status: WorkflowStatus | undefined): WorkflowStatus {
   return status ?? "review";
+}
+
+async function touchProjectActivity(ctx: MutationCtx, projectId: Id<"projects">) {
+  await ctx.db.patch(projectId, { lastActivityAt: Date.now() });
 }
 
 async function generatePublicId(ctx: MutationCtx) {
@@ -57,6 +150,7 @@ export const create = mutation({
     description: v.optional(v.string()),
     fileSize: v.optional(v.number()),
     contentType: v.optional(v.string()),
+    isFinalProof: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { user, project } = await requireProjectAccess(ctx, args.projectId, "member");
@@ -76,7 +170,12 @@ export const create = mutation({
       workflowStatus: "review",
       visibility: "public",
       publicId,
+      isFinalProof: args.isFinalProof ?? false,
+      finalCutApprovedAt: undefined,
+      finalCutApprovedByName: undefined,
     });
+
+    await touchProjectActivity(ctx, args.projectId);
 
     return videoId;
   },
@@ -104,6 +203,7 @@ export const list = query({
           ...video,
           uploaderName: video.uploaderName ?? "Unknown",
           workflowStatus: normalizeWorkflowStatus(video.workflowStatus),
+          isFinalProof: video.isFinalProof ?? false,
           commentCount: comments.length,
         };
       }),
@@ -120,7 +220,15 @@ export const get = query({
       uploaderName: video.uploaderName ?? "Unknown",
       workflowStatus: normalizeWorkflowStatus(video.workflowStatus),
       role: membership.role,
+      isFinalProof: video.isFinalProof ?? false,
     };
+  },
+});
+
+export const getById = internalQuery({
+  args: { videoId: v.id("videos") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.videoId);
   },
 });
 
@@ -151,6 +259,9 @@ export const getByPublicId = query({
         contentType: video.contentType,
         s3Key: video.s3Key,
         workflowStatus: video.workflowStatus,
+        isFinalProof: video.isFinalProof ?? false,
+        finalCutApprovedAt: video.finalCutApprovedAt,
+        finalCutApprovedByName: video.finalCutApprovedByName,
       },
     };
   },
@@ -202,9 +313,27 @@ export const getByShareGrant = query({
         contentType: video.contentType,
         s3Key: video.s3Key,
         workflowStatus: video.workflowStatus,
+        isFinalProof: video.isFinalProof ?? false,
+        finalCutApprovedAt: video.finalCutApprovedAt,
+        finalCutApprovedByName: video.finalCutApprovedByName,
       },
       grantExpiresAt: resolved.grant.expiresAt,
     };
+  },
+});
+
+export const getNextProofNumber = query({
+  args: { projectId: v.id("projects") },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    await requireProjectAccess(ctx, args.projectId, "member");
+
+    const videos = await ctx.db
+      .query("videos")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    return videos.length + 1;
   },
 });
 
@@ -213,15 +342,18 @@ export const update = mutation({
     videoId: v.id("videos"),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
+    isFinalProof: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "member");
+    const { video } = await requireVideoAccess(ctx, args.videoId, "member");
 
-    const updates: Partial<{ title: string; description: string }> = {};
+    const updates: Partial<{ title: string; description: string; isFinalProof: boolean }> = {};
     if (args.title !== undefined) updates.title = args.title;
     if (args.description !== undefined) updates.description = args.description;
+    if (args.isFinalProof !== undefined) updates.isFinalProof = args.isFinalProof;
 
     await ctx.db.patch(args.videoId, updates);
+    await touchProjectActivity(ctx, video.projectId);
   },
 });
 
@@ -231,11 +363,12 @@ export const setVisibility = mutation({
     visibility: visibilityValidator,
   },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "member");
+    const { video } = await requireVideoAccess(ctx, args.videoId, "member");
 
     await ctx.db.patch(args.videoId, {
       visibility: args.visibility,
     });
+    await touchProjectActivity(ctx, video.projectId);
   },
 });
 
@@ -245,10 +378,76 @@ export const updateWorkflowStatus = mutation({
     workflowStatus: workflowStatusValidator,
   },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "member");
+    const { video } = await requireVideoAccess(ctx, args.videoId, "member");
 
     await ctx.db.patch(args.videoId, {
       workflowStatus: args.workflowStatus,
+    });
+    await touchProjectActivity(ctx, video.projectId);
+  },
+});
+
+export const approveFinalCut = mutation({
+  args: {
+    videoId: v.id("videos"),
+  },
+  handler: async (ctx, args) => {
+    const { user } = await requireVideoAccess(ctx, args.videoId, "viewer");
+    return await approveFinalCutInternal(ctx, {
+      videoId: args.videoId,
+      approverName: identityName(user),
+    });
+  },
+});
+
+export const approveFinalCutForPublic = mutation({
+  args: {
+    publicId: v.string(),
+    approvedByName: v.string(),
+    approvedByCompany: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const video = await ctx.db
+      .query("videos")
+      .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
+      .unique();
+    if (!video || video.visibility !== "public" || video.status !== "ready") {
+      throw new Error("Video not found");
+    }
+
+    const user = await getUser(ctx);
+    const approverName = user ? identityName(user) : args.approvedByName;
+    return await approveFinalCutInternal(ctx, {
+      videoId: video._id,
+      approverName,
+      approverCompany: args.approvedByCompany,
+    });
+  },
+});
+
+export const approveFinalCutForShareGrant = mutation({
+  args: {
+    grantToken: v.string(),
+    approvedByName: v.string(),
+    approvedByCompany: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
+    if (!resolved) {
+      throw new Error("Invalid share grant");
+    }
+
+    const video = await ctx.db.get(resolved.shareLink.videoId);
+    if (!video || video.status !== "ready") {
+      throw new Error("Video not found");
+    }
+
+    const user = await getUser(ctx);
+    const approverName = user ? identityName(user) : args.approvedByName;
+    return await approveFinalCutInternal(ctx, {
+      videoId: video._id,
+      approverName,
+      approverCompany: args.approvedByCompany,
     });
   },
 });
@@ -256,8 +455,9 @@ export const updateWorkflowStatus = mutation({
 export const remove = mutation({
   args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "admin");
+    const { video } = await requireVideoAccess(ctx, args.videoId, "admin");
     await purgeAndDeleteVideo(ctx, args.videoId);
+    await touchProjectActivity(ctx, video.projectId);
   },
 });
 
@@ -266,11 +466,31 @@ export async function purgeAndDeleteVideo(ctx: MutationCtx, videoId: Id<"videos"
     videoId: videoId as string,
   });
 
+  const attachments = await ctx.db
+    .query("commentAttachments")
+    .withIndex("by_video", (q) => q.eq("videoId", videoId))
+    .collect();
+  if (attachments.length > 0) {
+    await ctx.scheduler.runAfter(0, internal.videoActions.purgeAttachmentFiles, {
+      keys: attachments.map((attachment) => attachment.s3Key),
+    });
+    for (const attachment of attachments) {
+      await ctx.db.delete(attachment._id);
+    }
+  }
+
   const comments = await ctx.db
     .query("comments")
     .withIndex("by_video", (q) => q.eq("videoId", videoId))
     .collect();
   for (const comment of comments) {
+    const reactions = await ctx.db
+      .query("commentReactions")
+      .withIndex("by_comment", (q) => q.eq("commentId", comment._id))
+      .collect();
+    for (const reaction of reactions) {
+      await ctx.db.delete(reaction._id);
+    }
     await ctx.db.delete(comment._id);
   }
 
@@ -523,7 +743,8 @@ export const updateDuration = mutation({
     duration: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "member");
+    const { video } = await requireVideoAccess(ctx, args.videoId, "member");
     await ctx.db.patch(args.videoId, { duration: args.duration });
+    await touchProjectActivity(ctx, video.projectId);
   },
 });

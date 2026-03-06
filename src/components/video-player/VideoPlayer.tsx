@@ -84,6 +84,12 @@ export interface VideoPlayerHandle {
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 const AUTO_QUALITY_LEVEL = -1 as const;
 const DEFAULT_FPS = 30;
+type FrameMetadata = { mediaTime: number };
+type VideoWithFrameCallback = HTMLVideoElement & {
+  requestVideoFrameCallback?: (
+    callback: (now: DOMHighResTimeStamp, metadata: FrameMetadata) => void,
+  ) => number;
+};
 
 type QualityLevelOption = {
   level: number;
@@ -234,13 +240,18 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const captureFrame = useCallback((): string | null => {
     const video = videoRef.current;
     if (!video || video.readyState < 2) return null;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0);
-    return canvas.toDataURL("image/png");
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0);
+      return canvas.toDataURL("image/png");
+    } catch {
+      // Cross-origin playback can taint canvas; callers should fall back to raw drawing.
+      return null;
+    }
   }, []);
 
   useImperativeHandle(ref, () => ({ seekTo, captureFrame }), [seekTo, captureFrame]);
@@ -593,11 +604,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       setIsMediaReady(true);
       setIsBuffering(false);
 
-      if (!fpsDetectedRef.current && "requestVideoFrameCallback" in video) {
+      const frameCallbackVideo = video as VideoWithFrameCallback;
+      if (!fpsDetectedRef.current && frameCallbackVideo.requestVideoFrameCallback) {
         fpsDetectedRef.current = true;
         let prevMedia: number | null = null;
         const deltas: number[] = [];
-        const onFrame = (_now: DOMHighResTimeStamp, meta: { mediaTime: number }) => {
+        const onFrame = (_now: DOMHighResTimeStamp, meta: FrameMetadata) => {
           if (cancelled) return;
           if (prevMedia !== null) {
             const d = meta.mediaTime - prevMedia;
@@ -609,10 +621,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             const fps = Math.round(1 / avg);
             if (fps >= 10 && fps <= 120) setDetectedFps(fps);
           } else {
-            (video as any).requestVideoFrameCallback(onFrame);
+            frameCallbackVideo.requestVideoFrameCallback(onFrame);
           }
         };
-        (video as any).requestVideoFrameCallback(onFrame);
+        frameCallbackVideo.requestVideoFrameCallback(onFrame);
       }
     };
 

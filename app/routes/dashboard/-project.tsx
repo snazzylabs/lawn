@@ -2,19 +2,27 @@
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 
 import { api } from "@convex/_generated/api";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { DropZone } from "@/components/upload/DropZone";
-import { UploadProgress } from "@/components/upload/UploadProgress";
 import { UploadButton } from "@/components/upload/UploadButton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatDuration, formatRelativeTime } from "@/lib/utils";
 import { triggerDownload } from "@/lib/download";
 import {
-  ArrowLeft,
   Play,
   MoreVertical,
   Trash2,
+  Edit2,
   Link as LinkIcon,
   Grid3X3,
   LayoutList,
@@ -22,6 +30,7 @@ import {
   MessageSquare,
   Eye,
   Share2,
+  ExternalLink,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -31,7 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { teamHomePath, videoPath } from "@/lib/routes";
+import { videoPath } from "@/lib/routes";
 import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import {
@@ -39,10 +48,10 @@ import {
   type VideoWorkflowStatus,
 } from "@/components/videos/VideoWorkflowStatusControl";
 import { useProjectData } from "./-project.data";
-import { prewarmTeam } from "./-team.data";
 import { prewarmVideo } from "./-video.data";
 import { useDashboardUploadContext } from "@/lib/dashboardUploadContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { ProjectShareDialog } from "@/components/ProjectShareDialog";
 
 type ViewMode = "grid" | "list";
 type ShareToastState = {
@@ -131,7 +140,6 @@ export default function ProjectPage({
 }) {
   const navigate = useNavigate({});
   const pathname = useLocation().pathname;
-  const convex = useConvex();
 
   const { context, resolvedProjectId, resolvedTeamSlug, project, videos } =
     useProjectData({ teamSlug, projectId });
@@ -139,23 +147,24 @@ export default function ProjectPage({
     api.videoPresence.listProjectOnlineCounts,
     resolvedProjectId ? { projectId: resolvedProjectId } : "skip",
   );
-  const { requestUpload, uploads } =
+  const { requestUpload } =
     useDashboardUploadContext();
   const deleteVideo = useMutation(api.videos.remove);
+  const updateVideo = useMutation(api.videos.update);
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
+  const setProjectNotionPage = useMutation(api.projects.setNotionPage);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
-  const generateProjectPublicId = useMutation(api.projects.generatePublicId);
-  const shortenUrl = useAction(api.shortLinks.shortenUrl);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [shareToast, setShareToast] = useState<ShareToastState | null>(null);
+  const [projectShareDialogOpen, setProjectShareDialogOpen] = useState(false);
+  const [notionDialogOpen, setNotionDialogOpen] = useState(false);
+  const [notionInput, setNotionInput] = useState("");
+  const [isSavingNotionLink, setIsSavingNotionLink] = useState(false);
   const shareToastTimeoutRef = useRef<number | null>(null);
 
   const shouldCanonicalize =
     !!context && !context.isCanonical && pathname !== context.canonicalPath;
-  const prewarmTeamIntentHandlers = useRoutePrewarmIntent(() =>
-    prewarmTeam(convex, { teamSlug: resolvedTeamSlug }),
-  );
 
   useEffect(() => {
     if (shouldCanonicalize && context) {
@@ -178,6 +187,11 @@ export default function ProjectPage({
     videos === undefined ||
     shouldCanonicalize;
 
+  useEffect(() => {
+    if (!project) return;
+    setNotionInput(project.notionPageUrl ?? project.notionPageId ?? "");
+  }, [project?._id, project?.notionPageId, project?.notionPageUrl]);
+
   const handleFilesSelected = useCallback(
     (files: File[]) => {
       if (!resolvedProjectId) return;
@@ -194,6 +208,21 @@ export default function ProjectPage({
       console.error("Failed to delete video:", error);
     }
   };
+
+  const handleEditVideoTitle = useCallback(
+    async (videoId: Id<"videos">, currentTitle: string) => {
+      const nextTitle = window.prompt("Edit video title", currentTitle);
+      if (nextTitle === null) return;
+      const trimmed = nextTitle.trim();
+      if (!trimmed || trimmed === currentTitle) return;
+      try {
+        await updateVideo({ videoId, title: trimmed });
+      } catch (error) {
+        console.error("Failed to update video title:", error);
+      }
+    },
+    [updateVideo],
+  );
 
   const handleDownloadVideo = useCallback(
     async (videoId: Id<"videos">, title: string) => {
@@ -231,6 +260,52 @@ export default function ProjectPage({
     }, 2400);
   }, []);
 
+  const notionPageUrl = project?.notionPageUrl
+    ?? (project?.notionPageId
+      ? `https://www.notion.so/${project.notionPageId.replace(/-/g, "")}`
+      : null);
+
+  const handleSaveNotionLink = useCallback(async () => {
+    if (!project) return;
+    setIsSavingNotionLink(true);
+    try {
+      const result = await setProjectNotionPage({
+        projectId: project._id,
+        notionPageInput: notionInput,
+      });
+      setNotionInput(result.notionPageUrl ?? result.notionPageId ?? "");
+      setNotionDialogOpen(false);
+      showShareToast(
+        "success",
+        result.notionPageId ? "Notion page linked" : "Notion link removed",
+      );
+    } catch (error) {
+      console.error("Failed to save Notion link:", error);
+      showShareToast("error", "Could not save Notion link");
+    } finally {
+      setIsSavingNotionLink(false);
+    }
+  }, [notionInput, project, setProjectNotionPage, showShareToast]);
+
+  const handleClearNotionLink = useCallback(async () => {
+    if (!project) return;
+    setIsSavingNotionLink(true);
+    try {
+      await setProjectNotionPage({
+        projectId: project._id,
+        notionPageInput: "",
+      });
+      setNotionInput("");
+      setNotionDialogOpen(false);
+      showShareToast("success", "Notion link removed");
+    } catch (error) {
+      console.error("Failed to clear Notion link:", error);
+      showShareToast("error", "Could not remove Notion link");
+    } finally {
+      setIsSavingNotionLink(false);
+    }
+  }, [project, setProjectNotionPage, showShareToast]);
+
   const handleShareVideo = useCallback(
     async (video: {
       _id: Id<"videos">;
@@ -266,58 +341,6 @@ export default function ProjectPage({
     },
     [projectId, resolvedTeamSlug, showShareToast],
   );
-
-  const handleShareProject = useCallback(async () => {
-    if (!resolvedProjectId) {
-      showShareToast("error", "Project is still loading");
-      return;
-    }
-
-    let publicId: string;
-    try {
-      publicId = await generateProjectPublicId({ projectId: resolvedProjectId });
-    } catch (error) {
-      console.error("Failed to generate project public ID:", error);
-      showShareToast("error", "Could not generate project link");
-      return;
-    }
-
-    const longUrl = `${window.location.origin}/projects/${publicId}`;
-    let shareUrl = longUrl;
-    let usedShortUrl = false;
-
-    try {
-      const result = await shortenUrl({ longUrl });
-      if (result?.shortUrl) {
-        shareUrl = result.shortUrl;
-        usedShortUrl = true;
-      }
-    } catch (error) {
-      console.error("Failed to shorten project URL:", error);
-    }
-
-    try {
-      const copied = await copyTextToClipboard(shareUrl);
-      if (!copied) {
-        showShareToast("error", "Clipboard unavailable");
-        return;
-      }
-      showShareToast(
-        "success",
-        usedShortUrl
-          ? "Project share link copied"
-          : "Project link copied (short link unavailable)",
-      );
-    } catch (error) {
-      console.error("Failed to copy project share URL:", error);
-      showShareToast("error", "Could not copy project link");
-    }
-  }, [
-    generateProjectPublicId,
-    resolvedProjectId,
-    shortenUrl,
-    showShareToast,
-  ]);
 
   // Not found state
   if (context === null || project === null) {
@@ -368,14 +391,30 @@ export default function ProjectPage({
           {canUpload && (
             <>
               <Button
-                onClick={() => void handleShareProject()}
+                onClick={() => setProjectShareDialogOpen(true)}
               >
                 <Share2 className="h-3.5 w-3.5 mr-1.5" />
                 Share Project
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setNotionDialogOpen(true)}
+              >
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                Link Notion
+              </Button>
               <UploadButton onFilesSelected={handleFilesSelected} />
             </>
           )}
+          {notionPageUrl ? (
+            <Button
+              variant="outline"
+              onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
+            >
+              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+              Open Notion
+            </Button>
+          ) : null}
         </div>
       </DashboardHeader>
 
@@ -459,6 +498,15 @@ export default function ProjectPage({
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleEditVideoTitle(video._id, video.title);
+                            }}
+                          >
+                            <Edit2 className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
                           {canDownload && (
                             <DropdownMenuItem
                               onClick={(e) => {
@@ -502,6 +550,11 @@ export default function ProjectPage({
                     <p className="text-[15px] text-[#1a1a1a] font-black truncate leading-tight">
                       {video.title}
                     </p>
+                    {video.isFinalProof && (
+                      <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a]">
+                        Final Proof
+                      </span>
+                    )}
                     <div className="mt-1.5 flex items-center gap-3">
                       <VideoWorkflowStatusControl
                         status={video.workflowStatus}
@@ -595,6 +648,11 @@ export default function ProjectPage({
                   <p className="font-black text-[#1a1a1a] truncate">
                     {video.title}
                   </p>
+                  {video.isFinalProof && (
+                    <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a]">
+                      Final Proof
+                    </span>
+                  )}
                   <div className="flex items-center gap-3 mt-1">
                     <VideoWorkflowStatusControl
                       status={video.workflowStatus}
@@ -642,6 +700,15 @@ export default function ProjectPage({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleEditVideoTitle(video._id, video.title);
+                        }}
+                      >
+                        <Edit2 className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
                       {canDownload && (
                         <DropdownMenuItem
                           onClick={(e) => {
@@ -683,6 +750,59 @@ export default function ProjectPage({
           </div>
         )}
       </div>
+
+      {resolvedProjectId ? (
+        <ProjectShareDialog
+          projectId={resolvedProjectId}
+          open={projectShareDialogOpen}
+          onOpenChange={setProjectShareDialogOpen}
+        />
+      ) : null}
+
+      <Dialog open={notionDialogOpen} onOpenChange={setNotionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Link Notion page</DialogTitle>
+            <DialogDescription>
+              Paste a Notion page URL or page ID for this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              placeholder="https://www.notion.so/... or page ID"
+              value={notionInput}
+              onChange={(event) => setNotionInput(event.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setNotionDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            {project?.notionPageId ? (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={isSavingNotionLink}
+                onClick={() => void handleClearNotionLink()}
+              >
+                Remove
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              disabled={isSavingNotionLink}
+              onClick={() => void handleSaveNotionLink()}
+            >
+              {isSavingNotionLink ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {shareToast ? (
         <div className="fixed right-4 top-4 z-50" aria-live="polite">

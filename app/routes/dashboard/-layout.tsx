@@ -1,7 +1,7 @@
 
-import { useConvex, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useAuthState } from "@/lib/auth";
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
@@ -13,12 +13,6 @@ import {
 } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import {
-  dashboardHomePath,
-  teamHomePath,
-  teamSettingsPath,
-} from "@/lib/routes";
-import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,10 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { UploadProgress } from "@/components/upload/UploadProgress";
-import { prewarmDashboardIndex } from "./-index.data";
-import { prewarmSettings } from "./-settings.data";
-import { prewarmTeam } from "./-team.data";
-import { useVideoUploadManager } from "./-useVideoUploadManager";
+import { useVideoUploadManager, type UploadRequestItem } from "./-useVideoUploadManager";
 import { DashboardUploadProvider } from "@/lib/dashboardUploadContext";
 
 const VIDEO_FILE_EXTENSIONS = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
@@ -41,6 +32,10 @@ function isVideoFile(file: File) {
 function getVideoFiles(files: FileList | null) {
   if (!files) return [];
   return Array.from(files).filter(isVideoFile);
+}
+
+function baseName(fileName: string) {
+  return fileName.replace(/\.[^/.]+$/, "");
 }
 
 function dragEventHasFiles(event: DragEvent) {
@@ -55,7 +50,6 @@ export default function DashboardLayout() {
   const location = useLocation();
   const { pathname, searchStr } = location;
   const params = useParams({ strict: false });
-  const convex = useConvex();
   const teamSlug =
     typeof params.teamSlug === "string" ? params.teamSlug : undefined;
   const routeProjectId =
@@ -68,8 +62,6 @@ export default function DashboardLayout() {
     api.videos.getPublicIdByVideoId,
     routeVideoId ? { videoId: routeVideoId } : "skip",
   );
-  const teamHome = teamSlug ? teamHomePath(teamSlug) : null;
-  const settingsPath = teamSlug ? teamSettingsPath(teamSlug) : null;
   const uploadTargets = useQuery(
     api.projects.listUploadTargets,
     teamSlug ? { teamSlug } : {},
@@ -81,6 +73,16 @@ export default function DashboardLayout() {
   } = useVideoUploadManager();
   const [isGlobalDragActive, setIsGlobalDragActive] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [uploadSetupOpen, setUploadSetupOpen] = useState(false);
+  const [uploadSetupProjectId, setUploadSetupProjectId] = useState<Id<"projects"> | null>(null);
+  const [uploadDrafts, setUploadDrafts] = useState<
+    Array<{
+      file: File;
+      titleMode: "proof" | "custom";
+      customTitle: string;
+      isFinalProof: boolean;
+    }>
+  >([]);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const dragDepthRef = useRef(0);
   const uploadableProjectIds = useMemo(
@@ -90,6 +92,24 @@ export default function DashboardLayout() {
   const canUploadToCurrentProject = routeProjectId
     ? uploadableProjectIds.has(routeProjectId)
     : false;
+  const nextProofNumber = useQuery(
+    api.videos.getNextProofNumber,
+    uploadSetupProjectId ? { projectId: uploadSetupProjectId } : "skip",
+  );
+
+  const openUploadSetup = useCallback((projectId: Id<"projects">, files: File[]) => {
+    if (files.length === 0) return;
+    setUploadSetupProjectId(projectId);
+    setUploadDrafts(
+      files.map((file) => ({
+        file,
+        titleMode: "proof",
+        customTitle: baseName(file.name),
+        isFinalProof: false,
+      })),
+    );
+    setUploadSetupOpen(true);
+  }, []);
 
   const requestUpload = useCallback(
     (inputFiles: File[], preferredProjectId?: Id<"projects">) => {
@@ -97,7 +117,7 @@ export default function DashboardLayout() {
       if (files.length === 0) return;
 
       if (preferredProjectId) {
-        void uploadFilesToProject(preferredProjectId, files);
+        openUploadSetup(preferredProjectId, files);
         return;
       }
 
@@ -105,7 +125,7 @@ export default function DashboardLayout() {
         routeProjectId &&
         (canUploadToCurrentProject || uploadTargets === undefined)
       ) {
-        void uploadFilesToProject(routeProjectId, files);
+        openUploadSetup(routeProjectId, files);
         return;
       }
 
@@ -119,8 +139,8 @@ export default function DashboardLayout() {
     },
     [
       canUploadToCurrentProject,
+      openUploadSetup,
       routeProjectId,
-      uploadFilesToProject,
       uploadTargets,
     ],
   );
@@ -132,9 +152,9 @@ export default function DashboardLayout() {
 
       setProjectPickerOpen(false);
       setPendingFiles(null);
-      void uploadFilesToProject(projectId, files);
+      openUploadSetup(projectId, files);
     },
-    [pendingFiles, uploadFilesToProject],
+    [openUploadSetup, pendingFiles],
   );
 
   const handleProjectPickerOpenChange = useCallback((open: boolean) => {
@@ -143,6 +163,38 @@ export default function DashboardLayout() {
       setPendingFiles(null);
     }
   }, []);
+
+  const handleUploadSetupOpenChange = useCallback((open: boolean) => {
+    setUploadSetupOpen(open);
+    if (!open) {
+      setUploadDrafts([]);
+      setUploadSetupProjectId(null);
+    }
+  }, []);
+
+  const handleStartUpload = useCallback(() => {
+    if (!uploadSetupProjectId || uploadDrafts.length === 0 || nextProofNumber === undefined) return;
+
+    const items: UploadRequestItem[] = uploadDrafts.map((draft, index) => {
+      const proofTitle = `Proof ${nextProofNumber + index}`;
+      const customTitle = draft.customTitle.trim();
+      const chosenTitle =
+        draft.titleMode === "custom" && customTitle
+          ? customTitle
+          : proofTitle;
+      return {
+        file: draft.file,
+        title: chosenTitle,
+        isFinalProof: draft.isFinalProof,
+      };
+    });
+
+    setUploadSetupOpen(false);
+    setUploadDrafts([]);
+    const projectId = uploadSetupProjectId;
+    setUploadSetupProjectId(null);
+    void uploadFilesToProject(projectId, items);
+  }, [nextProofNumber, uploadDrafts, uploadFilesToProject, uploadSetupProjectId]);
 
   useEffect(() => {
     const handleDragEnter = (event: DragEvent) => {
@@ -341,6 +393,123 @@ export default function DashboardLayout() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={uploadSetupOpen} onOpenChange={handleUploadSetupOpenChange}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Prepare Upload</DialogTitle>
+            <DialogDescription>
+              Name each upload and optionally flag it as Final Proof.
+            </DialogDescription>
+          </DialogHeader>
+
+          {uploadDrafts.length === 0 ? (
+            <p className="text-sm text-[#888]">No videos selected.</p>
+          ) : nextProofNumber === undefined ? (
+            <p className="text-sm text-[#888]">Loading proof defaults...</p>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto border-2 border-[#1a1a1a] divide-y-2 divide-[#1a1a1a]">
+              {uploadDrafts.map((draft, index) => {
+                const proofTitle = `Proof ${nextProofNumber + index}`;
+                return (
+                  <div key={`${draft.file.name}-${index}`} className="p-3 space-y-2 bg-[#f0f0e8]">
+                    <div className="text-sm font-bold text-[#1a1a1a] truncate" title={draft.file.name}>
+                      {draft.file.name}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="flex items-center gap-2 text-sm text-[#1a1a1a]">
+                        <input
+                          type="radio"
+                          name={`title-mode-${index}`}
+                          checked={draft.titleMode === "proof"}
+                          onChange={() =>
+                            setUploadDrafts((prev) =>
+                              prev.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, titleMode: "proof" } : entry,
+                              ),
+                            )
+                          }
+                        />
+                        <span className="font-mono">Default: {proofTitle}</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-[#1a1a1a]">
+                        <input
+                          type="radio"
+                          name={`title-mode-${index}`}
+                          checked={draft.titleMode === "custom"}
+                          onChange={() =>
+                            setUploadDrafts((prev) =>
+                              prev.map((entry, entryIndex) =>
+                                entryIndex === index ? { ...entry, titleMode: "custom" } : entry,
+                              ),
+                            )
+                          }
+                        />
+                        <span>Custom title</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.customTitle}
+                        onChange={(event) =>
+                          setUploadDrafts((prev) =>
+                            prev.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, customTitle: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                        disabled={draft.titleMode !== "custom"}
+                        placeholder="Enter custom title"
+                        className={cn(
+                          "w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1.5 text-sm text-[#1a1a1a] focus:outline-none",
+                          draft.titleMode !== "custom" && "opacity-60",
+                        )}
+                      />
+                    </div>
+
+                    <label className="inline-flex items-center gap-2 text-sm font-bold text-[#1a1a1a]">
+                      <input
+                        type="checkbox"
+                        checked={draft.isFinalProof}
+                        onChange={(event) =>
+                          setUploadDrafts((prev) =>
+                            prev.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, isFinalProof: event.target.checked }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                      Mark as Final Proof
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => handleUploadSetupOpenChange(false)}
+              className="h-9 px-3 border-2 border-[#1a1a1a] bg-[#f0f0e8] text-sm font-bold text-[#1a1a1a] hover:bg-[#e8e8e0]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleStartUpload}
+              disabled={uploadDrafts.length === 0 || nextProofNumber === undefined}
+              className="h-9 px-4 border-2 border-[#1a1a1a] bg-[#2F6DB4] text-sm font-bold text-white hover:bg-[#255a94] disabled:opacity-60"
+            >
+              Start Upload
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

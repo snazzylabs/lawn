@@ -65,6 +65,10 @@ export default defineSchema({
     description: v.optional(v.string()),
     publicId: v.optional(v.string()),
     visibility: v.optional(v.union(v.literal("public"), v.literal("private"))),
+    lastActivityAt: v.optional(v.number()),
+    notionPageId: v.optional(v.string()),
+    notionPageUrl: v.optional(v.string()),
+    notionLastClientCommentNotifiedAt: v.optional(v.number()),
   })
     .index("by_team", ["teamId"])
     .index("by_public_id", ["publicId"]),
@@ -110,6 +114,9 @@ export default defineSchema({
       v.literal("rework"),
       v.literal("done"),
     ),
+    isFinalProof: v.optional(v.boolean()),
+    finalCutApprovedAt: v.optional(v.number()),
+    finalCutApprovedByName: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
     .index("by_public_id", ["publicId"])
@@ -155,6 +162,32 @@ export default defineSchema({
 
   shareAccessGrants: defineTable({
     shareLinkId: v.id("shareLinks"),
+    token: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_share_link", ["shareLinkId"]),
+
+  projectShareLinks: defineTable({
+    projectId: v.id("projects"),
+    token: v.string(),
+    createdByClerkId: v.string(),
+    createdByName: v.string(),
+    expiresAt: v.optional(v.number()),
+    password: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
+    failedAccessAttempts: v.optional(v.number()),
+    lockedUntil: v.optional(v.number()),
+    viewCount: v.number(),
+    shortUrl: v.optional(v.string()),
+    shortLinkId: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_project", ["projectId"]),
+
+  projectShareAccessGrants: defineTable({
+    shareLinkId: v.id("projectShareLinks"),
     token: v.string(),
     expiresAt: v.number(),
     createdAt: v.number(),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,25 +8,34 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { HelpCircle } from "lucide-react";
+import { HelpCircle, MessageSquareText, Scissors, Pencil, Paperclip } from "lucide-react";
+import { OPEN_HELP_EVENT } from "@/lib/commentHotkeys";
 
 const SHORTCUTS = [
-  { keys: ["I"], description: "Set In point at current time" },
-  { keys: ["O"], description: "Set Out point at current time" },
+  { keys: ["N"], description: "Focus new comment" },
+  { keys: ["I"], description: "Mark In point at current time" },
+  { keys: ["O"], description: "Mark Out point and focus comment" },
+  { keys: ["?"], description: "Open this help menu" },
   { keys: ["Enter"], description: "Submit comment" },
   { keys: ["Shift", "Enter"], description: "New line in comment" },
   { keys: ["Esc"], description: "Cancel editing / close" },
 ] as const;
 
 const TOOLS = [
-  { name: "Timestamped Comments", description: "Comments pin to the current playback time" },
-  { name: "In/Out Ranges", description: "Press I and O to mark a range on the timeline" },
-  { name: "Draw on Frame", description: "Annotate directly on the video frame" },
-  { name: "Attach Files", description: "Upload PDFs, images, or videos with your notes" },
+  { name: "Timestamped Comments", description: "Comments pin to the current playback time", icon: MessageSquareText },
+  { name: "In/Out Ranges", description: "Press I then O to mark a range on the timeline", icon: Scissors },
+  { name: "Draw on Frame", description: "Annotate directly on the video frame", icon: Pencil },
+  { name: "Attach Files", description: "Upload PDFs, images, or videos with your notes", icon: Paperclip },
 ] as const;
 
 export function HelpButton() {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpen = () => setOpen(true);
+    window.addEventListener(OPEN_HELP_EVENT, handleOpen);
+    return () => window.removeEventListener(OPEN_HELP_EVENT, handleOpen);
+  }, []);
 
   return (
     <>
@@ -69,9 +78,14 @@ export function HelpButton() {
               <h3 className="text-sm font-bold text-[#1a1a1a] mb-2">Tools</h3>
               <div className="space-y-2">
                 {TOOLS.map((tool) => (
-                  <div key={tool.name} className="text-sm">
-                    <span className="font-bold text-[#1a1a1a]">{tool.name}</span>
-                    <span className="text-[#888] ml-1.5">— {tool.description}</span>
+                  <div key={tool.name} className="text-sm flex items-start gap-2">
+                    <span className="inline-flex h-6 w-6 items-center justify-center border-2 border-[#1a1a1a] bg-[#e8e8e0] text-[#1a1a1a] shrink-0">
+                      <tool.icon className="h-3.5 w-3.5" />
+                    </span>
+                    <div>
+                      <span className="font-bold text-[#1a1a1a]">{tool.name}</span>
+                      <span className="text-[#888] ml-1.5">— {tool.description}</span>
+                    </div>
                   </div>
                 ))}
               </div>

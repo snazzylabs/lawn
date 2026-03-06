@@ -18,6 +18,7 @@ import { useState, useRef, useEffect } from "react";
 import { CommentInput } from "./CommentInput";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import { CommentAttachments } from "./CommentAttachments";
+import { CommentDrawingThumbnail } from "./CommentDrawingThumbnail";
 
 interface Comment {
   _id: Id<"comments">;
@@ -313,6 +314,13 @@ export function CommentItem({
               <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap break-words">
                 {comment.text}
               </p>
+              {comment.drawingData && (
+                <CommentDrawingThumbnail
+                  src={comment.drawingData}
+                  className="w-fit"
+                  imageClassName="max-h-28"
+                />
+              )}
               <CommentAttachments attachments={comment.attachments} />
               <p className="text-[11px] text-[#888] mt-1">
                 {formatRelativeTime(comment._creationTime)}

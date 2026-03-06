@@ -17,13 +17,15 @@ import { formatDuration, formatTimestamp, formatRelativeTime, getInitials } from
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
-import { Lock, Video, AlertCircle, Pencil, Trash2 } from "lucide-react";
+import { Lock, Video, AlertCircle, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { HelpButton } from "@/components/HelpDialog";
 import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
 import { CommentAttachments } from "@/components/comments/CommentAttachments";
+import { CommentDrawingThumbnail } from "@/components/comments/CommentDrawingThumbnail";
 import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
 import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
 import { resolveAttachmentContentType } from "@/lib/attachments";
+import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -32,10 +34,12 @@ export default function SharePage() {
   const { isLoaded: isUserLoaded, id: userId } = useCurrentUser();
 
   const { guest, setGuestIdentity, isReady: isGuestReady } = useGuestIdentity();
+  const canComment = Boolean(userId || guest);
   const issueAccessGrant = useMutation(api.shareLinks.issueAccessGrant);
   const createComment = useMutation(api.comments.createForShareGrant);
   const updateGuestComment = useMutation(api.comments.updateForGuest);
   const removeGuestComment = useMutation(api.comments.removeForGuest);
+  const approveFinalCut = useMutation(api.videos.approveFinalCutForShareGrant);
   const getPlaybackSession = useAction(api.videoActions.getSharedPlaybackSession);
 
   const [grantToken, setGrantToken] = useState<string | null>(null);
@@ -52,6 +56,7 @@ export default function SharePage() {
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isApprovingFinalCut, setIsApprovingFinalCut] = useState(false);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
   // Drawing state
@@ -64,6 +69,7 @@ export default function SharePage() {
   // Range state
   const [rangeMarker, setRangeMarker] = useState<{ inTime: number; outTime: number } | null>(null);
   const currentTimeRef = useRef(0);
+  const pendingInTimeRef = useRef<number | null>(null);
 
   // Guest edit state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -97,21 +103,45 @@ export default function SharePage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      if (isTextEntryTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        if (!canComment) {
+          setShowOnboarding(true);
+          return;
+        }
+        focusVisibleCommentInputSoon();
+        return;
+      }
+
+      if (e.key === "?") {
+        e.preventDefault();
+        window.dispatchEvent(new Event(OPEN_HELP_EVENT));
+        return;
+      }
+
       if (e.key === "i" || e.key === "I") {
         e.preventDefault();
         const time = currentTimeRef.current;
-        setRangeMarker((prev) => prev ? { ...prev, inTime: time } : { inTime: time, outTime: time + 5 });
+        pendingInTimeRef.current = time;
+        setRangeMarker(null);
       } else if (e.key === "o" || e.key === "O") {
         e.preventDefault();
-        const time = currentTimeRef.current;
-        setRangeMarker((prev) => prev ? { ...prev, outTime: time } : { inTime: Math.max(0, time - 5), outTime: time });
+        const outTime = currentTimeRef.current;
+        const pendingIn = pendingInTimeRef.current;
+        const start = pendingIn ?? Math.max(0, outTime - 5);
+        setRangeMarker({
+          inTime: Math.min(start, outTime),
+          outTime: Math.max(start, outTime),
+        });
+        pendingInTimeRef.current = null;
+        focusVisibleCommentInputSoon();
       }
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, []);
+  }, [canComment]);
 
   useEffect(() => {
     setGrantToken(null);
@@ -219,6 +249,26 @@ export default function SharePage() {
 
   const getAttachmentUploadUrl = useAction(api.videoActions.getAttachmentUploadUrl);
   const createAttachmentMut = useMutation(api.comments.createAttachment);
+  const prepareDrawingForComment = useCallback(
+    async (draft?: string | null) => {
+      if (draft) return draft;
+      const canvas = drawingCanvasRef.current;
+      if (!canvas || canvas.getStrokes().length === 0) return drawingData;
+
+      const rawDrawing = canvas.toDataURL();
+      if (!rawDrawing) return null;
+
+      const frame = playerRef.current?.captureFrame() ?? null;
+      if (!frame) return rawDrawing;
+
+      try {
+        return await compositeDrawingOnFrame(frame, rawDrawing);
+      } catch {
+        return rawDrawing;
+      }
+    },
+    [drawingData],
+  );
 
   const handleSubmitComment = useCallback(
     async (args: {
@@ -230,12 +280,13 @@ export default function SharePage() {
       files?: File[];
     }) => {
       if (!grantToken) return;
+      const preparedDrawing = await prepareDrawingForComment(args.drawingData ?? null);
       const commentId = await createComment({
         grantToken,
         text: args.text,
         timestampSeconds: args.timestampSeconds,
         endTimestampSeconds: args.endTimestampSeconds,
-        drawingData: args.drawingData,
+        drawingData: preparedDrawing ?? undefined,
         parentId: args.parentId,
         userName: guest?.name,
         guestSessionId: guest?.guestId,
@@ -274,8 +325,9 @@ export default function SharePage() {
         }
       }
       setDrawingData(null);
+      setDrawingMode(false);
     },
-    [createComment, grantToken, guest, getAttachmentUploadUrl, createAttachmentMut],
+    [createComment, grantToken, guest, getAttachmentUploadUrl, createAttachmentMut, prepareDrawingForComment],
   );
 
   const handleEditSave = useCallback(
@@ -303,7 +355,26 @@ export default function SharePage() {
     [guest, removeGuestComment],
   );
 
-  const canComment = Boolean(userId || guest);
+  const handleApproveFinalCut = useCallback(async () => {
+    if (!grantToken || isApprovingFinalCut) return;
+    if (!canComment) {
+      setShowOnboarding(true);
+      return;
+    }
+    setIsApprovingFinalCut(true);
+    try {
+      await approveFinalCut({
+        grantToken,
+        approvedByName: guest?.name ?? "Client",
+        approvedByCompany: guest?.company,
+      });
+    } catch (error) {
+      console.error("Failed to approve final cut:", error);
+    } finally {
+      setIsApprovingFinalCut(false);
+    }
+  }, [approveFinalCut, canComment, grantToken, guest?.company, guest?.name, isApprovingFinalCut]);
+
   const reactions = useQuery(
     api.comments.getReactionsForVideo,
     videoData?.video?._id
@@ -532,10 +603,10 @@ export default function SharePage() {
           )}
           <CommentAttachments attachments={comment.attachments} />
           {comment.drawingData && (
-            <img
+            <CommentDrawingThumbnail
               src={comment.drawingData}
-              alt="Drawing annotation"
-              className="mt-2 border border-[#ccc] max-h-32 w-auto"
+              className="w-fit"
+              imageClassName="max-h-32"
             />
           )}
           <div className="flex items-center gap-3 mt-1">
@@ -708,6 +779,37 @@ export default function SharePage() {
         </div>
       </header>
 
+      {video.isFinalProof && (
+        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-6 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a]">
+                Final Proof
+              </p>
+              <p className="text-sm text-[#1a1a1a]">
+                {video.finalCutApprovedAt
+                  ? `Approved by ${video.finalCutApprovedByName ?? "client"} and ready for publishing.`
+                  : "Approve this final cut to notify the team it is ready for publishing."}
+              </p>
+            </div>
+            {video.finalCutApprovedAt ? (
+              <span className="inline-flex items-center gap-2 border-2 border-[#1a1a1a] bg-[#22c55e] px-3 py-2 text-sm font-black uppercase tracking-wide text-white">
+                <CheckCircle2 className="h-4 w-4" />
+                Final Cut Approved
+              </span>
+            ) : (
+              <Button
+                className="h-11 border-2 border-[#1a1a1a] bg-[#16a34a] px-5 text-sm font-black uppercase tracking-wide text-white shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:bg-[#15803d]"
+                onClick={() => void handleApproveFinalCut()}
+                disabled={isApprovingFinalCut}
+              >
+                {isApprovingFinalCut ? "Approving..." : "Approve Final Cut"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <main className="max-w-6xl mx-auto p-6 space-y-6">
         <div>
           <div className="flex items-center gap-3">
@@ -757,15 +859,10 @@ export default function SharePage() {
                     onColorChange={setDrawingColor}
                     onUndo={() => drawingCanvasRef.current?.undo()}
                     onClear={() => drawingCanvasRef.current?.clear()}
+                    onCancel={() => setDrawingMode(false)}
                     onDone={async () => {
-                      const drawing = drawingCanvasRef.current?.toDataURL() ?? null;
-                      const frame = playerRef.current?.captureFrame() ?? null;
-                      if (frame && drawing) {
-                        const composited = await compositeDrawingOnFrame(frame, drawing);
-                        setDrawingData(composited);
-                      } else {
-                        setDrawingData(drawing);
-                      }
+                      const preparedDrawing = await prepareDrawingForComment();
+                      setDrawingData(preparedDrawing);
                       setDrawingMode(false);
                     }}
                   />
@@ -803,6 +900,7 @@ export default function SharePage() {
               <CommentInput
                 timestampSeconds={currentTime}
                 showTimestamp
+                hotkeyTarget
                 onSubmitComment={handleSubmitComment}
                 videoId={userId ? video._id : undefined}
                 onRangeChange={setRangeMarker}

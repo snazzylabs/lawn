@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery, MutationCtx, QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   identityAvatarUrl,
@@ -130,6 +131,114 @@ async function getPublicVideoByPublicId(
   return video;
 }
 
+function excerpt(text: string, maxLength = 80): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (!collapsed) return "";
+  return collapsed.length > maxLength
+    ? `${collapsed.slice(0, maxLength - 1)}…`
+    : collapsed;
+}
+
+async function createTeamNotificationForVideo(
+  ctx: MutationCtx,
+  args: {
+    videoId: Id<"videos">;
+    projectId: Id<"projects">;
+    type: string;
+    message: string;
+  },
+) {
+  const project = await ctx.db.get(args.projectId);
+  if (!project) return;
+  const now = Date.now();
+
+  await ctx.db.insert("notifications", {
+    teamId: project.teamId,
+    videoId: args.videoId,
+    projectId: args.projectId,
+    type: args.type,
+    message: args.message,
+    read: false,
+    createdAt: now,
+  });
+  await ctx.db.patch(args.projectId, { lastActivityAt: now });
+}
+
+async function scheduleNotionClientCommentNotification(
+  ctx: MutationCtx,
+  args: {
+    commentId: Id<"comments">;
+    source: "public" | "share_grant";
+    linkPath: string;
+  },
+) {
+  try {
+    await ctx.scheduler.runAfter(0, internal.notionActions.notifyProjectClientComment, {
+      commentId: args.commentId,
+      source: args.source,
+      linkPath: args.linkPath,
+    });
+  } catch (error) {
+    console.error("Failed to schedule Notion notification", error);
+  }
+}
+
+async function touchProjectActivityByVideo(
+  ctx: MutationCtx,
+  videoId: Id<"videos">,
+) {
+  const video = await ctx.db.get(videoId);
+  if (!video) return;
+  await ctx.db.patch(video.projectId, { lastActivityAt: Date.now() });
+}
+
+async function purgeCommentArtifacts(ctx: MutationCtx, commentId: Id<"comments">) {
+  const attachments = await ctx.db
+    .query("commentAttachments")
+    .withIndex("by_comment", (q) => q.eq("commentId", commentId))
+    .collect();
+  if (attachments.length > 0) {
+    await ctx.scheduler.runAfter(0, internal.videoActions.purgeAttachmentFiles, {
+      keys: attachments.map((attachment) => attachment.s3Key),
+    });
+    for (const attachment of attachments) {
+      await ctx.db.delete(attachment._id);
+    }
+  }
+
+  const reactions = await ctx.db
+    .query("commentReactions")
+    .withIndex("by_comment", (q) => q.eq("commentId", commentId))
+    .collect();
+  for (const reaction of reactions) {
+    await ctx.db.delete(reaction._id);
+  }
+}
+
+async function deleteCommentThread(ctx: MutationCtx, rootCommentId: Id<"comments">) {
+  const discovered: Id<"comments">[] = [];
+  const stack: Id<"comments">[] = [rootCommentId];
+
+  while (stack.length > 0) {
+    const currentId = stack.pop();
+    if (!currentId) break;
+    discovered.push(currentId);
+
+    const replies = await ctx.db
+      .query("comments")
+      .withIndex("by_parent", (q) => q.eq("parentId", currentId))
+      .collect();
+    for (const reply of replies) {
+      stack.push(reply._id);
+    }
+  }
+
+  for (const commentId of discovered.reverse()) {
+    await purgeCommentArtifacts(ctx, commentId);
+    await ctx.db.delete(commentId);
+  }
+}
+
 export const getById = internalQuery({
   args: { commentId: v.id("comments") },
   handler: async (ctx, args) => {
@@ -162,6 +271,8 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const { user } = await requireVideoAccess(ctx, args.videoId, "viewer");
+    const video = await ctx.db.get(args.videoId);
+    if (!video) throw new Error("Video not found");
 
     if (args.parentId) {
       const parent = await ctx.db.get(args.parentId);
@@ -170,10 +281,11 @@ export const create = mutation({
       }
     }
 
-    return await ctx.db.insert("comments", {
+    const actorName = identityName(user);
+    const commentId = await ctx.db.insert("comments", {
       videoId: args.videoId,
       userClerkId: user.subject,
-      userName: identityName(user),
+      userName: actorName,
       userAvatarUrl: identityAvatarUrl(user),
       text: args.text,
       timestampSeconds: args.timestampSeconds,
@@ -183,6 +295,17 @@ export const create = mutation({
       resolved: false,
       userCompany: "Snazzy Labs",
     });
+
+    const textSnippet = excerpt(args.text);
+    const action = args.parentId ? "replied" : "commented";
+    await createTeamNotificationForVideo(ctx, {
+      videoId: video._id,
+      projectId: video.projectId,
+      type: args.parentId ? "comment_replied" : "comment_created",
+      message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
+    });
+
+    return commentId;
   },
 });
 
@@ -213,10 +336,11 @@ export const createForPublic = mutation({
       }
     }
 
-    return await ctx.db.insert("comments", {
+    const actorName = user ? identityName(user) : (args.userName?.trim() || "Guest");
+    const commentId = await ctx.db.insert("comments", {
       videoId: video._id,
       userClerkId: user ? user.subject : undefined,
-      userName: user ? identityName(user) : (args.userName?.trim() || "Guest"),
+      userName: actorName,
       userAvatarUrl: user ? identityAvatarUrl(user) : undefined,
       text: args.text,
       timestampSeconds: args.timestampSeconds,
@@ -227,6 +351,22 @@ export const createForPublic = mutation({
       guestSessionId: user ? undefined : args.guestSessionId,
       userCompany: user ? "Snazzy Labs" : args.userCompany,
     });
+
+    const textSnippet = excerpt(args.text);
+    const action = args.parentId ? "replied" : "commented";
+    await createTeamNotificationForVideo(ctx, {
+      videoId: video._id,
+      projectId: video.projectId,
+      type: args.parentId ? "comment_replied" : "comment_created",
+      message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
+    });
+    await scheduleNotionClientCommentNotification(ctx, {
+      commentId,
+      source: "public",
+      linkPath: `/watch/${args.publicId}`,
+    });
+
+    return commentId;
   },
 });
 
@@ -262,10 +402,11 @@ export const createForShareGrant = mutation({
       }
     }
 
-    return await ctx.db.insert("comments", {
+    const actorName = user ? identityName(user) : (args.userName?.trim() || "Guest");
+    const commentId = await ctx.db.insert("comments", {
       videoId: video._id,
       userClerkId: user ? user.subject : undefined,
-      userName: user ? identityName(user) : (args.userName?.trim() || "Guest"),
+      userName: actorName,
       userAvatarUrl: user ? identityAvatarUrl(user) : undefined,
       text: args.text,
       timestampSeconds: args.timestampSeconds,
@@ -276,6 +417,22 @@ export const createForShareGrant = mutation({
       guestSessionId: user ? undefined : args.guestSessionId,
       userCompany: user ? "Snazzy Labs" : args.userCompany,
     });
+
+    const textSnippet = excerpt(args.text);
+    const action = args.parentId ? "replied" : "commented";
+    await createTeamNotificationForVideo(ctx, {
+      videoId: video._id,
+      projectId: video.projectId,
+      type: args.parentId ? "comment_replied" : "comment_created",
+      message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
+    });
+    await scheduleNotionClientCommentNotification(ctx, {
+      commentId,
+      source: "share_grant",
+      linkPath: `/share/${args.grantToken}`,
+    });
+
+    return commentId;
   },
 });
 
@@ -304,6 +461,7 @@ export const updateForGuest = mutation({
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(args.commentId, patch);
+      await touchProjectActivityByVideo(ctx, comment.videoId);
     }
   },
 });
@@ -321,16 +479,8 @@ export const removeForGuest = mutation({
       throw new Error("You can only delete your own comments");
     }
 
-    const replies = await ctx.db
-      .query("comments")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.commentId))
-      .collect();
-
-    for (const reply of replies) {
-      await ctx.db.delete(reply._id);
-    }
-
-    await ctx.db.delete(args.commentId);
+    await deleteCommentThread(ctx, args.commentId);
+    await touchProjectActivityByVideo(ctx, comment.videoId);
   },
 });
 
@@ -360,6 +510,7 @@ export const update = mutation({
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(args.commentId, patch);
+      await touchProjectActivityByVideo(ctx, comment.videoId);
     }
   },
 });
@@ -376,16 +527,8 @@ export const remove = mutation({
       await requireVideoAccess(ctx, comment.videoId, "admin");
     }
 
-    const replies = await ctx.db
-      .query("comments")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.commentId))
-      .collect();
-
-    for (const reply of replies) {
-      await ctx.db.delete(reply._id);
-    }
-
-    await ctx.db.delete(args.commentId);
+    await deleteCommentThread(ctx, args.commentId);
+    await touchProjectActivityByVideo(ctx, comment.videoId);
   },
 });
 
@@ -398,6 +541,7 @@ export const toggleResolved = mutation({
     await requireVideoAccess(ctx, comment.videoId, "member");
 
     await ctx.db.patch(args.commentId, { resolved: !comment.resolved });
+    await touchProjectActivityByVideo(ctx, comment.videoId);
   },
 });
 
@@ -501,7 +645,7 @@ export const createAttachment = mutation({
       throw new Error("Invalid attachment key");
     }
 
-    return await ctx.db.insert("commentAttachments", {
+    const attachmentId = await ctx.db.insert("commentAttachments", {
       commentId: args.commentId,
       videoId: comment.videoId,
       s3Key: args.s3Key,
@@ -509,6 +653,8 @@ export const createAttachment = mutation({
       fileSize: args.fileSize,
       contentType: args.contentType,
     });
+    await touchProjectActivityByVideo(ctx, comment.videoId);
+    return attachmentId;
   },
 });
 
@@ -520,6 +666,11 @@ export const addReaction = mutation({
     userName: v.string(),
   },
   handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+    const video = await ctx.db.get(comment.videoId);
+    if (!video) throw new Error("Video not found");
+
     const existing = await ctx.db
       .query("commentReactions")
       .withIndex("by_comment_and_user", (q) =>
@@ -536,6 +687,14 @@ export const addReaction = mutation({
       userIdentifier: args.userIdentifier,
       userName: args.userName,
     });
+
+    const actorName = args.userName.trim() || "Someone";
+    await createTeamNotificationForVideo(ctx, {
+      videoId: video._id,
+      projectId: video.projectId,
+      type: "comment_reaction_added",
+      message: `${actorName} reacted ${args.emoji} on "${video.title}"`,
+    });
   },
 });
 
@@ -546,6 +705,9 @@ export const removeReaction = mutation({
     userIdentifier: v.string(),
   },
   handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+
     const existing = await ctx.db
       .query("commentReactions")
       .withIndex("by_comment_and_user", (q) =>
@@ -557,6 +719,7 @@ export const removeReaction = mutation({
     if (match) {
       await ctx.db.delete(match._id);
     }
+    await touchProjectActivityByVideo(ctx, comment.videoId);
   },
 });
 

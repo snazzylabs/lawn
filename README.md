@@ -1,42 +1,50 @@
-# Snazzy Labs Video Review
+# Snazzy Labs Proofing Portal
 
-A video review platform for creative teams, used internally at [Snazzy Labs](https://snazzylabs.com). Built on top of [Lawn](https://github.com/jakkuh/lawn) by Theo Browne / Ping Labs.
+Snazzy Labs' internal and client-facing video proofing app, built on top of [Lawn](https://github.com/jakkuh/lawn).
 
-## What this fork does
+## Current Product Scope
 
-Lawn is an excellent open-source video review tool. This fork adapts it for Snazzy Labs' internal workflow with a focus on client-facing review experiences and a distinctive visual identity.
+- Team/admin dashboard for projects, uploads, sharing, and review workflow
+- Public/share review pages for clients without mandatory account creation
+- Timestamped comments with optional in/out ranges and drawing annotations
+- Threaded replies, emoji reactions, and file attachments on comments
+- Final Proof workflow with explicit final-cut approval state
+- Project-level and video-level restricted share links
+- Team notifications for review activity (comments, replies, reactions, submissions, approvals)
+- Notion integration:
+  - Link a project to a Notion page from the project dashboard
+  - Post throttled client-comment alerts to that Notion page
 
-### Design
-- Brutalist, typographic design language with warm cream (`#f0f0e8`) backgrounds, strong `2px` borders, and sharp edges
-- Blue accent (`#2F6DB4`) used sparingly for interactive elements
-- Dramatic size contrast between headings and body text
+## Infrastructure and Backend
 
-### Client review experience
-- **Guest commenting** — clients can leave timestamped comments without creating an account
-- **Guest onboarding** — guided first-time experience for external reviewers
-- **Avatars and replies** — threaded conversations with avatar display on public/share pages
-- **Emoji reactions** — quick feedback with preset emoji reactions on any comment
-- **Review submission** — clients can formally submit their review, notifying the team
-- **Range markers (I/O points)** — mark in/out points on the timeline to reference specific segments
-- **Drawing annotations** — sketch directly on video frames
-- **File attachments** — attach reference files to comments
+- Convex backend (queries, mutations, actions, internal cron jobs)
+- Clerk authentication for team/admin access
+- S3-compatible object storage (Cloudflare R2 compatible)
+- Self-hosted transcoder support (plus Mux-compatible playback paths)
+- snazzy.fm short-link integration for share links
 
-### Collaboration tools
-- **Notification system** — bell icon in dashboard header with unread count and video deep links
-- **Short links** — project and public video URLs shortened via snazzy.fm
-- **Help dialog** — keyboard shortcut reference (I, O, Enter, Shift+Enter, Esc)
-- **Workflow status** — review / rework / done tracking per video
+## Data Lifecycle and Cleanup
 
-### Infrastructure
-- Self-hosted HLS transcoding via Docker/FFmpeg (alternative to Mux)
-- S3-compatible storage (R2, Railway, etc.)
-- Convex backend with Clerk authentication
-- See upstream [setup](docs/setup.md) and [deployment](docs/deployment.md) docs
+- Stale multipart uploads are automatically aborted by cron
+- Project/video deletion cascades clean up related comment attachments in object storage
+- Inactive project auto-purge support (scheduled)
+- Team-facing manual "Purge old projects" control with selectable time window
+
+## Security and Secrets
+
+- Secrets are read from environment variables only (never from client bundles)
+- Common secret-bearing local files are gitignored (`.env*`, `.clerk/`, `.claude/`, etc.)
+- Rotate and replace any credential that has ever been exposed in plain text
+
+## Setup and Deployment
+
+- Local setup: [docs/setup.md](docs/setup.md)
+- Deployment notes: [docs/deployment.md](docs/deployment.md)
 
 ## Attribution
 
-See [ATTRIBUTION.md](./ATTRIBUTION.md) for full details. This project is built on [Lawn](https://github.com/jakkuh/lawn), licensed under MIT by Ping Labs.
+See [ATTRIBUTION.md](./ATTRIBUTION.md). This project builds on [Lawn](https://github.com/jakkuh/lawn), MIT-licensed by Ping Labs.
 
 ## License
 
-[MIT](./LICENSE) — Copyright (c) 2026 Ping Labs
+[MIT](./LICENSE)

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { getUser, identityAvatarUrl, identityEmail, identityName, requireUser, requireTeamAccess } from "./auth";
 import { getTeamSubscriptionState } from "./billingHelpers";
-import { purgeAndDeleteVideo } from "./videos";
+import { purgeAndDeleteProject } from "./projects";
 
 function normalizedEmail(value: string) {
   return value.trim().toLowerCase();
@@ -423,16 +423,7 @@ export const deleteTeam = mutation({
       .collect();
 
     for (const project of projects) {
-      const videos = await ctx.db
-        .query("videos")
-        .withIndex("by_project", (q) => q.eq("projectId", project._id))
-        .collect();
-
-      for (const video of videos) {
-        await purgeAndDeleteVideo(ctx, video._id);
-      }
-
-      await ctx.db.delete(project._id);
+      await purgeAndDeleteProject(ctx, project._id);
     }
 
     await ctx.db.delete(args.teamId);

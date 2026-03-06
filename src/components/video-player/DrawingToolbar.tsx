@@ -14,6 +14,7 @@ interface DrawingToolbarProps {
   onUndo: () => void;
   onClear: () => void;
   onDone: () => void;
+  onCancel?: () => void;
 }
 
 const tools: { id: DrawingTool; icon: typeof Pencil; label: string }[] = [
@@ -31,17 +32,20 @@ export function DrawingToolbar({
   onUndo,
   onClear,
   onDone,
+  onCancel,
 }: DrawingToolbarProps) {
   return (
-    <div className="absolute top-3 left-1/2 z-40 -translate-x-1/2 flex items-center gap-1 rounded-lg border border-white/20 bg-black/80 px-2 py-1.5 text-white shadow-2xl backdrop-blur">
+    <div className="absolute left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-1 border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1.5 text-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)]">
       {tools.map(({ id, icon: Icon, label }) => (
         <button
           key={id}
           type="button"
           onClick={() => onToolChange(id)}
           className={cn(
-            "inline-flex h-8 w-8 items-center justify-center rounded-md transition",
-            tool === id ? "bg-white/20" : "hover:bg-white/10"
+            "inline-flex h-8 w-8 items-center justify-center border-2 border-transparent transition",
+            tool === id
+              ? "border-[#1a1a1a] bg-[#2F6DB4] text-white"
+              : "hover:border-[#1a1a1a]/40 hover:bg-[#e8e8e0]"
           )}
           title={label}
         >
@@ -49,7 +53,7 @@ export function DrawingToolbar({
         </button>
       ))}
 
-      <div className="mx-1 h-5 w-px bg-white/20" />
+      <div className="mx-1 h-5 w-px bg-[#1a1a1a]/20" />
 
       {COLORS.map((c) => (
         <button
@@ -58,19 +62,19 @@ export function DrawingToolbar({
           onClick={() => onColorChange(c)}
           className={cn(
             "h-5 w-5 rounded-full border-2 transition",
-            color === c ? "border-white scale-110" : "border-white/30 hover:border-white/60"
+            color === c ? "border-[#1a1a1a] scale-110" : "border-[#1a1a1a]/40 hover:border-[#1a1a1a]"
           )}
           style={{ backgroundColor: c }}
           title={c}
         />
       ))}
 
-      <div className="mx-1 h-5 w-px bg-white/20" />
+      <div className="mx-1 h-5 w-px bg-[#1a1a1a]/20" />
 
       <button
         type="button"
         onClick={onUndo}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-white/10"
+        className="inline-flex h-8 w-8 items-center justify-center border-2 border-transparent transition hover:border-[#1a1a1a]/40 hover:bg-[#e8e8e0]"
         title="Undo"
       >
         <Undo2 className="h-4 w-4" />
@@ -78,18 +82,29 @@ export function DrawingToolbar({
       <button
         type="button"
         onClick={onClear}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md transition hover:bg-white/10"
+        className="inline-flex h-8 w-8 items-center justify-center border-2 border-transparent transition hover:border-[#1a1a1a]/40 hover:bg-[#e8e8e0]"
         title="Clear"
       >
         <Trash2 className="h-4 w-4" />
       </button>
 
-      <div className="mx-1 h-5 w-px bg-white/20" />
+      <div className="mx-1 h-5 w-px bg-[#1a1a1a]/20" />
+
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex h-8 items-center justify-center border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 text-xs font-bold uppercase tracking-wide transition hover:bg-[#e8e8e0]"
+          title="Cancel drawing"
+        >
+          Cancel
+        </button>
+      )}
 
       <button
         type="button"
         onClick={onDone}
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-[#2F6DB4] px-3 text-xs font-medium transition hover:bg-[#4DA7F8]"
+        className="inline-flex h-8 items-center justify-center gap-1 border-2 border-[#1a1a1a] bg-[#2F6DB4] px-3 text-xs font-bold text-white transition hover:bg-[#255a94]"
         title="Done drawing"
       >
         <Check className="h-3.5 w-3.5" />

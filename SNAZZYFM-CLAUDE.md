@@ -21,17 +21,17 @@ https://snazzy.fm/api
 Every single API request **must** include the following HTTP header:
 
 ```
-Authorization: Bearer REDACTED_SNAZZY_API_KEY
+Authorization: Bearer YOUR_SNAZZY_API_KEY
 Content-Type: application/json
 ```
 
-The API key is unique to the account and is available in the developer dashboard at `https://snazzy.fm/developers`. Your API key is `REDACTED_SNAZZY_API_KEY`. Store it securely as an environment variable — never hardcode it in client-side code.
+The API key is unique to the account and is available in the developer dashboard at `https://snazzy.fm/developers`. Store it securely as an environment variable (for example, `SNAZZY_API_KEY`) and never hardcode it in client-side code.
 
 **Example header (Node.js / fetch):**
 
 ```js
 const headers = {
-  'Authorization': 'Bearer REDACTED_SNAZZY_API_KEY',
+  'Authorization': 'Bearer YOUR_SNAZZY_API_KEY',
   'Content-Type': 'application/json',
 };
 ```
@@ -377,7 +377,7 @@ const data = await response.json();
 
 Before shipping the integration, verify all of the following:
 
-1. The API key (`REDACTED_SNAZZY_API_KEY`) is stored in an environment variable (e.g., `SNAZZY_API_KEY`) and is **never** exposed to the client/browser.
+1. The API key is stored in an environment variable (e.g., `SNAZZY_API_KEY`) and is **never** exposed to the client/browser.
 2. Every request includes both `Authorization: Bearer ...` and `Content-Type: application/json` headers.
 3. Every response is checked for `error !== 0` before accessing data fields.
 4. The `shorturl` field from the Create response is what gets stored and displayed — not a manually constructed URL.

@@ -1,15 +1,190 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useLocation, useParams } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDuration } from "@/lib/utils";
 import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
-import { MessageSquare, Video } from "lucide-react";
+import { AlertCircle, Lock, MessageSquare, Video } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ProjectPublicPage() {
   const params = useParams({ strict: false });
   const publicId = params.publicId as string;
+  const location = useLocation();
+  const issueAccessGrant = useMutation(api.projectShareLinks.issueAccessGrant);
+  const shareToken = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const token = searchParams.get("st");
+    return token && token.length > 0 ? token : null;
+  }, [location.search]);
 
-  const data = useQuery(api.projects.getByPublicId, { publicId });
+  const [grantToken, setGrantToken] = useState<string | null>(null);
+  const [hasAttemptedAutoGrant, setHasAttemptedAutoGrant] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
+  const [isRequestingGrant, setIsRequestingGrant] = useState(false);
+
+  const shareInfo = useQuery(
+    api.projectShareLinks.getByToken,
+    shareToken ? { token: shareToken } : "skip",
+  );
+  const publicData = useQuery(
+    api.projects.getByPublicId,
+    shareToken ? "skip" : { publicId },
+  );
+  const restrictedData = useQuery(
+    api.projects.getByPublicIdForShareGrant,
+    shareToken && grantToken ? { publicId, grantToken } : "skip",
+  );
+  const data = shareToken ? restrictedData : publicData;
+
+  useEffect(() => {
+    setGrantToken(null);
+    setHasAttemptedAutoGrant(false);
+    setPasswordError(false);
+    setPasswordInput("");
+  }, [shareToken, publicId]);
+
+  const acquireGrant = useCallback(
+    async (password?: string) => {
+      if (!shareToken || isRequestingGrant) return false;
+      setIsRequestingGrant(true);
+      setPasswordError(false);
+
+      try {
+        const result = await issueAccessGrant({ token: shareToken, password });
+        if (result.ok && result.grantToken) {
+          setGrantToken(result.grantToken);
+          return true;
+        }
+
+        setPasswordError(Boolean(password));
+        return false;
+      } catch {
+        setPasswordError(Boolean(password));
+        return false;
+      } finally {
+        setIsRequestingGrant(false);
+      }
+    },
+    [issueAccessGrant, isRequestingGrant, shareToken],
+  );
+
+  useEffect(() => {
+    if (!shareToken || !shareInfo || grantToken) return;
+    if (shareInfo.status !== "ok" || hasAttemptedAutoGrant) return;
+
+    setHasAttemptedAutoGrant(true);
+    void acquireGrant();
+  }, [acquireGrant, grantToken, hasAttemptedAutoGrant, shareInfo, shareToken]);
+
+  const isBootstrappingRestricted =
+    Boolean(shareToken) &&
+    (shareInfo === undefined ||
+      (shareInfo?.status === "ok" &&
+        ((!grantToken && (!hasAttemptedAutoGrant || isRequestingGrant)) ||
+          (Boolean(grantToken) && restrictedData === undefined))));
+
+  if (isBootstrappingRestricted) {
+    return (
+      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center">
+        <p className="text-[#888] text-sm">Opening shared project...</p>
+      </div>
+    );
+  }
+
+  if (shareToken && (shareInfo?.status === "missing" || shareInfo?.status === "expired")) {
+    return (
+      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[#dc2626]/10 flex items-center justify-center mb-4 border-2 border-[#dc2626]">
+              <AlertCircle className="h-6 w-6 text-[#dc2626]" />
+            </div>
+            <CardTitle>Link expired or invalid</CardTitle>
+            <CardDescription>
+              This project share link is no longer valid.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to="/" preload="intent" className="block">
+              <Button variant="outline" className="w-full">
+                Go to Snazzy Labs
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (shareToken && shareInfo?.status === "requiresPassword" && !grantToken) {
+    return (
+      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
+              <Lock className="h-6 w-6 text-[#888]" />
+            </div>
+            <CardTitle>Password required</CardTitle>
+            <CardDescription>
+              This project share link is password protected.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                await acquireGrant(passwordInput);
+              }}
+              className="space-y-4"
+            >
+              <Input
+                type="password"
+                placeholder="Enter password"
+                value={passwordInput}
+                onChange={(event) => setPasswordInput(event.target.value)}
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-sm text-[#dc2626]">Incorrect password</p>
+              )}
+              <Button type="submit" className="w-full" disabled={!passwordInput || isRequestingGrant}>
+                {isRequestingGrant ? "Verifying..." : "View project"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (
+    shareToken &&
+    shareInfo?.status === "ok" &&
+    !grantToken &&
+    hasAttemptedAutoGrant &&
+    !isRequestingGrant
+  ) {
+    return (
+      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[#dc2626]/10 flex items-center justify-center mb-4 border-2 border-[#dc2626]">
+              <AlertCircle className="h-6 w-6 text-[#dc2626]" />
+            </div>
+            <CardTitle>Could not open project</CardTitle>
+            <CardDescription>
+              This project share link could not be verified. Try opening the link
+              again.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   if (data === undefined) {
     return (
@@ -23,7 +198,7 @@ export default function ProjectPublicPage() {
     return (
       <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center">
         <div className="text-center space-y-2">
-          <p className="text-lg font-black text-[#1a1a1a]">Project not found</p>
+          <p className="text-lg font-black text-[#1a1a1a]">Project not available</p>
           <p className="text-sm text-[#888]">This project may be private or no longer available.</p>
         </div>
       </div>
@@ -58,10 +233,9 @@ export default function ProjectPublicPage() {
         ) : (
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {videos.map((video) => (
-              <Link
+              <a
                 key={video._id}
-                to="/watch/$publicId"
-                params={{ publicId: video.publicId } as any}
+                href={`/watch/${video.publicId}`}
                 className="block border-2 border-[#1a1a1a] bg-[#f0f0e8] hover:bg-[#e8e8e0] transition-colors"
               >
                 {video.thumbnailUrl ? (
@@ -96,7 +270,7 @@ export default function ProjectPublicPage() {
                     )}
                   </div>
                 </div>
-              </Link>
+              </a>
             ))}
           </div>
         )}

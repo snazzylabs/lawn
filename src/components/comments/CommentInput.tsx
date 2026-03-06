@@ -7,6 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatTimestamp, formatTimestampInput, parseTimestampInput } from "@/lib/utils";
 import { Send, X, Scissors, Pencil, Paperclip } from "lucide-react";
+import { CommentDrawingThumbnail } from "./CommentDrawingThumbnail";
 
 interface CommentInputProps {
   videoId?: Id<"videos">;
@@ -22,6 +23,7 @@ interface CommentInputProps {
   externalRange?: { inTime: number; outTime: number } | null;
   onDrawingRequest?: () => void;
   drawingData?: string | null;
+  hotkeyTarget?: boolean;
   onSubmitComment?: (args: {
     text: string;
     timestampSeconds: number;
@@ -46,6 +48,7 @@ export function CommentInput({
   externalRange,
   onDrawingRequest,
   drawingData,
+  hotkeyTarget = false,
   onSubmitComment,
 }: CommentInputProps) {
   const [text, setText] = useState("");
@@ -128,7 +131,7 @@ export function CommentInput({
   };
 
   const submitComment = async () => {
-    if (!text.trim() && pendingFiles.length === 0) return;
+    if (!text.trim() && pendingFiles.length === 0 && !drawingData) return;
 
     setIsLoading(true);
     try {
@@ -196,6 +199,7 @@ export function CommentInput({
       >
       <textarea
         ref={textareaRef}
+        data-comment-hotkey-target={hotkeyTarget ? "true" : undefined}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -243,6 +247,24 @@ export function CommentInput({
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
+        </div>
+      )}
+
+      {drawingData && (
+        <div
+          className={
+            variant === "seamless"
+              ? "mx-4 mb-2 border border-[#1a1a1a]/30 bg-[#e8e8e0] px-2 py-2"
+              : "mx-3 mb-2 border border-[#1a1a1a]/30 bg-[#e8e8e0] px-2 py-2"
+          }
+        >
+          <p className="text-[11px] font-mono text-[#666]">Annotation preview</p>
+          <CommentDrawingThumbnail
+            src={drawingData}
+            alt="Pending annotation"
+            className="mt-1 w-fit"
+            imageClassName="max-h-24"
+          />
         </div>
       )}
 
@@ -359,7 +381,7 @@ export function CommentInput({
           variant={variant === "seamless" ? "ghost" : "primary"}
           size="icon"
           className="h-8 w-8 shrink-0 disabled:opacity-50"
-          disabled={(!text.trim() && pendingFiles.length === 0) || isLoading}
+          disabled={(!text.trim() && pendingFiles.length === 0 && !drawingData) || isLoading}
         >
           <Send className="h-4 w-4" />
         </Button>

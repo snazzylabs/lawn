@@ -1,12 +1,14 @@
 "use node";
 
 import {
+  AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListMultipartUploadsCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   UploadPartCommand,
@@ -762,6 +764,23 @@ async function deleteAllObjectsWithPrefix(prefix: string) {
   } while (continuationToken);
 }
 
+async function deleteObjectsByKeys(keys: string[]) {
+  if (keys.length === 0) return;
+  const s3 = getS3Client();
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    await s3.send(
+      new DeleteObjectsCommand({
+        Bucket: BUCKET_NAME,
+        Delete: {
+          Objects: chunk.map((key) => ({ Key: key })),
+          Quiet: true,
+        },
+      }),
+    );
+  }
+}
+
 export const purgeVideoFiles = internalAction({
   args: { videoId: v.string() },
   returns: v.null(),
@@ -769,6 +788,70 @@ export const purgeVideoFiles = internalAction({
     const prefix = `videos/${args.videoId}/`;
     await deleteAllObjectsWithPrefix(prefix);
     return null;
+  },
+});
+
+export const purgeAttachmentFiles = internalAction({
+  args: {
+    keys: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (_ctx, args) => {
+    await deleteObjectsByKeys(args.keys);
+    return null;
+  },
+});
+
+export const cleanupStaleMultipartUploads = internalAction({
+  args: {
+    maxAgeHours: v.optional(v.number()),
+    prefix: v.optional(v.string()),
+  },
+  returns: v.object({
+    abortedCount: v.number(),
+  }),
+  handler: async (_ctx, args) => {
+    const s3 = getS3Client();
+    const cutoffMs = Date.now() - Math.max(1, args.maxAgeHours ?? 48) * 60 * 60 * 1000;
+    let keyMarker: string | undefined;
+    let uploadIdMarker: string | undefined;
+    let abortedCount = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const page = await s3.send(
+        new ListMultipartUploadsCommand({
+          Bucket: BUCKET_NAME,
+          Prefix: args.prefix ?? "videos/",
+          KeyMarker: keyMarker,
+          UploadIdMarker: uploadIdMarker,
+          MaxUploads: 1000,
+        }),
+      );
+
+      for (const upload of page.Uploads ?? []) {
+        const uploadId = upload.UploadId;
+        const key = upload.Key;
+        const initiated = upload.Initiated;
+        if (!uploadId || !key || !initiated) continue;
+        if (initiated.getTime() > cutoffMs) continue;
+
+        await s3.send(
+          new AbortMultipartUploadCommand({
+            Bucket: BUCKET_NAME,
+            Key: key,
+            UploadId: uploadId,
+          }),
+        );
+        abortedCount += 1;
+      }
+
+      hasMore = Boolean(page.IsTruncated);
+      keyMarker = hasMore ? page.NextKeyMarker : undefined;
+      uploadIdMarker = hasMore ? page.NextUploadIdMarker : undefined;
+    }
+
+    return { abortedCount };
   },
 });
 

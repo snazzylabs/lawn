@@ -36,6 +36,10 @@ export const submit = mutation({
       read: false,
       createdAt: submittedAt,
     });
+
+    await ctx.db.patch(video.projectId, {
+      lastActivityAt: submittedAt,
+    });
   },
 });
 

@@ -12,6 +12,7 @@ import { DrawingToolbar } from "@/components/video-player/DrawingToolbar";
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
+import { HelpButton } from "@/components/HelpDialog";
 import {
   VideoWorkflowStatusControl,
   type VideoWorkflowStatus,
@@ -23,6 +24,7 @@ import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { resolveAttachmentContentType } from "@/lib/attachments";
+import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
 import {
   Edit2,
   Check,
@@ -31,6 +33,7 @@ import {
   MessageSquare,
   MoreVertical,
   Download,
+  CheckCircle2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -39,10 +42,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Id } from "@convex/_generated/dataModel";
-import { projectPath, teamHomePath } from "@/lib/routes";
+import { projectPath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prewarmProject } from "./-project.data";
-import { prewarmTeam } from "./-team.data";
 import { useVideoData } from "./-video.data";
 
 export default function VideoPage() {
@@ -71,6 +73,7 @@ export default function VideoPage() {
   const createComment = useMutation(api.comments.create);
   const createAttachment = useMutation(api.comments.createAttachment);
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
+  const approveFinalCut = useMutation(api.videos.approveFinalCut);
   const getPlaybackSession = useAction(api.videoActions.getPlaybackSession);
   const getOriginalPlaybackUrl = useAction(api.videoActions.getOriginalPlaybackUrl);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
@@ -82,6 +85,7 @@ export default function VideoPage() {
   const [highlightedCommentId, setHighlightedCommentId] = useState<Id<"comments"> | undefined>();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  const [isApprovingFinalCut, setIsApprovingFinalCut] = useState(false);
   const [playbackSession, setPlaybackSession] = useState<{
     url: string;
     posterUrl: string;
@@ -101,6 +105,9 @@ export default function VideoPage() {
   const [drawingColor, setDrawingColor] = useState("#ef4444");
   const drawingCanvasRef = useRef<DrawingCanvasHandle | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+  const currentTimeRef = useRef(0);
+  const pendingInTimeRef = useRef<number | null>(null);
+  const canComment = true;
 
   const timelineComments = useMemo(() => {
     if (!comments) return [];
@@ -123,9 +130,6 @@ export default function VideoPage() {
   const isUsingOriginalFallback = Boolean(activePlaybackUrl && activePlaybackUrl === originalPlaybackUrl && !playbackUrl);
   const shouldCanonicalize =
     !!context && !context.isCanonical && pathname !== context.canonicalPath;
-  const prewarmTeamIntentHandlers = useRoutePrewarmIntent(() =>
-    prewarmTeam(convex, { teamSlug: resolvedTeamSlug }),
-  );
   const prewarmProjectIntentHandlers = useRoutePrewarmIntent(() => {
     if (!resolvedProjectId) return;
     return prewarmProject(convex, {
@@ -137,6 +141,56 @@ export default function VideoPage() {
     videoId: resolvedVideoId,
     enabled: Boolean(resolvedVideoId),
   });
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTextEntryTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        if (!canComment) return;
+        if (window.matchMedia("(max-width: 1023px)").matches) {
+          setMobileCommentsOpen(true);
+        }
+        focusVisibleCommentInputSoon();
+        return;
+      }
+
+      if (e.key === "?") {
+        e.preventDefault();
+        window.dispatchEvent(new Event(OPEN_HELP_EVENT));
+        return;
+      }
+
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        const time = currentTimeRef.current;
+        pendingInTimeRef.current = time;
+        setRangeMarker(null);
+        return;
+      }
+
+      if (e.key === "o" || e.key === "O") {
+        e.preventDefault();
+        const outTime = currentTimeRef.current;
+        const pendingIn = pendingInTimeRef.current;
+        const start = pendingIn ?? Math.max(0, outTime - 5);
+        setRangeMarker({
+          inTime: Math.min(start, outTime),
+          outTime: Math.max(start, outTime),
+        });
+        pendingInTimeRef.current = null;
+        focusVisibleCommentInputSoon();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [canComment]);
 
   useEffect(() => {
     if (shouldCanonicalize && context) {
@@ -230,6 +284,27 @@ export default function VideoPage() {
     [playerRef, setHighlightedCommentId]
   );
 
+  const prepareDrawingForComment = useCallback(
+    async (draft?: string | null) => {
+      if (draft) return draft;
+      const canvas = drawingCanvasRef.current;
+      if (!canvas || canvas.getStrokes().length === 0) return drawingData;
+
+      const rawDrawing = canvas.toDataURL();
+      if (!rawDrawing) return null;
+
+      const frame = playerRef.current?.captureFrame() ?? null;
+      if (!frame) return rawDrawing;
+
+      try {
+        return await compositeDrawingOnFrame(frame, rawDrawing);
+      } catch {
+        return rawDrawing;
+      }
+    },
+    [drawingData],
+  );
+
   const handleSubmitComment = useCallback(
     async (args: {
       text: string;
@@ -240,13 +315,14 @@ export default function VideoPage() {
       files?: File[];
     }) => {
       if (!resolvedVideoId) return;
+      const preparedDrawing = await prepareDrawingForComment(args.drawingData ?? null);
 
       const commentId = await createComment({
         videoId: resolvedVideoId,
         text: args.text,
         timestampSeconds: args.timestampSeconds,
         endTimestampSeconds: args.endTimestampSeconds,
-        drawingData: args.drawingData,
+        drawingData: preparedDrawing ?? undefined,
         parentId: args.parentId,
       });
 
@@ -280,11 +356,13 @@ export default function VideoPage() {
       }
 
       setDrawingData(null);
+      setDrawingMode(false);
     },
     [
       createAttachment,
       createComment,
       getAttachmentUploadUrl,
+      prepareDrawingForComment,
       resolvedVideoId,
     ],
   );
@@ -331,6 +409,18 @@ export default function VideoPage() {
     [resolvedVideoId, updateVideoWorkflowStatus],
   );
 
+  const handleApproveFinalCut = useCallback(async () => {
+    if (!resolvedVideoId || isApprovingFinalCut) return;
+    setIsApprovingFinalCut(true);
+    try {
+      await approveFinalCut({ videoId: resolvedVideoId });
+    } catch (error) {
+      console.error("Failed to approve final cut:", error);
+    } finally {
+      setIsApprovingFinalCut(false);
+    }
+  }, [approveFinalCut, isApprovingFinalCut, resolvedVideoId]);
+
   const startEditingTitle = () => {
     if (video) {
       setEditedTitle(video.title);
@@ -355,7 +445,6 @@ export default function VideoPage() {
   }
 
   const canEdit = video.role !== "viewer";
-  const canComment = true;
 
   return (
     <div className="h-full flex flex-col">
@@ -441,6 +530,7 @@ export default function VideoPage() {
             <LinkIcon className="mr-1.5 h-4 w-4" />
             Share
           </Button>
+          <HelpButton />
           <Button
             variant="outline"
             className="lg:hidden"
@@ -463,6 +553,7 @@ export default function VideoPage() {
               void handleUpdateWorkflowStatus(workflowStatus);
             }}
           />
+          <HelpButton />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8">
@@ -498,6 +589,37 @@ export default function VideoPage() {
           </DropdownMenu>
         </div>
       </DashboardHeader>
+
+      {video.isFinalProof && (
+        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a]">
+                Final Proof
+              </p>
+              <p className="text-sm text-[#1a1a1a]">
+                {video.finalCutApprovedAt
+                  ? `Approved by ${video.finalCutApprovedByName ?? "team"} and ready for publishing.`
+                  : "Final cut is ready. Approve to notify team for publishing."}
+              </p>
+            </div>
+            {video.finalCutApprovedAt ? (
+              <span className="inline-flex items-center gap-2 border-2 border-[#1a1a1a] bg-[#22c55e] px-3 py-2 text-sm font-black uppercase tracking-wide text-white">
+                <CheckCircle2 className="h-4 w-4" />
+                Final Cut Approved
+              </span>
+            ) : (
+              <Button
+                onClick={() => void handleApproveFinalCut()}
+                disabled={isApprovingFinalCut}
+                className="h-11 border-2 border-[#1a1a1a] bg-[#16a34a] px-5 text-sm font-black uppercase tracking-wide text-white shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:bg-[#15803d]"
+              >
+                {isApprovingFinalCut ? "Approving..." : "Approve Final Cut"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main content - horizontal split */}
       <div className="flex-1 flex overflow-hidden">
@@ -578,15 +700,10 @@ export default function VideoPage() {
                     onColorChange={setDrawingColor}
                     onUndo={() => drawingCanvasRef.current?.undo()}
                     onClear={() => drawingCanvasRef.current?.clear()}
+                    onCancel={() => setDrawingMode(false)}
                     onDone={async () => {
-                      const drawing = drawingCanvasRef.current?.toDataURL() ?? null;
-                      const frame = playerRef.current?.captureFrame() ?? null;
-                      if (frame && drawing) {
-                        const composited = await compositeDrawingOnFrame(frame, drawing);
-                        setDrawingData(composited);
-                      } else {
-                        setDrawingData(drawing);
-                      }
+                      const preparedDrawing = await prepareDrawingForComment();
+                      setDrawingData(preparedDrawing);
                       setDrawingMode(false);
                     }}
                   />
@@ -659,6 +776,7 @@ export default function VideoPage() {
                 timestampSeconds={currentTime}
                 showTimestamp
                 variant="seamless"
+                hotkeyTarget
                 onSubmitComment={handleSubmitComment}
                 onRangeChange={editingCommentId ? undefined : setRangeMarker}
                 externalRange={editingCommentId ? null : rangeMarker}
@@ -718,6 +836,7 @@ export default function VideoPage() {
                 timestampSeconds={currentTime}
                 showTimestamp
                 variant="seamless"
+                hotkeyTarget
                 onSubmitComment={handleSubmitComment}
                 onRangeChange={editingCommentId ? undefined : setRangeMarker}
                 externalRange={editingCommentId ? null : rangeMarker}

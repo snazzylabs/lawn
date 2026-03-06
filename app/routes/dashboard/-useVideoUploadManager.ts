@@ -17,6 +17,12 @@ export interface ManagedUploadItem {
   abortController?: AbortController;
 }
 
+export interface UploadRequestItem {
+  file: File;
+  title: string;
+  isFinalProof?: boolean;
+}
+
 function createUploadId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -198,10 +204,10 @@ export function useVideoUploadManager() {
   };
 
   const uploadFilesToProject = useCallback(
-    async (projectId: Id<"projects">, files: File[]) => {
-      for (const file of files) {
+    async (projectId: Id<"projects">, items: UploadRequestItem[]) => {
+      for (const item of items) {
+        const { file, title, isFinalProof } = item;
         const uploadId = createUploadId();
-        const title = file.name.replace(/\.[^/.]+$/, "");
         const abortController = new AbortController();
 
         setUploads((prev) => [
@@ -217,6 +223,7 @@ export function useVideoUploadManager() {
             title,
             fileSize: file.size,
             contentType: file.type || "video/mp4",
+            isFinalProof,
           });
 
           updateUpload(uploadId, { videoId: createdVideoId, status: "uploading" });

@@ -52,6 +52,10 @@ next-env.d.ts
 # convex temp (docker)
 .convex-tmp
 
+# local handoff docs
+CODEX_HANDOFF.md
+.claude/
+
 # secrets & credentials — never commit these
 *.key
 *.p12
