@@ -115,7 +115,7 @@ export default defineSchema({
 
   comments: defineTable({
     videoId: v.id("videos"),
-    userClerkId: v.string(),
+    userClerkId: v.optional(v.string()),
     userName: v.string(),
     userAvatarUrl: v.optional(v.string()),
     text: v.string(),

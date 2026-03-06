@@ -5,6 +5,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { VideoPlayer, type VideoPlayerHandle } from "@/components/video-player/VideoPlayer";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
@@ -23,6 +24,7 @@ export default function WatchPage() {
   const [playbackSession, setPlaybackSession] = useState<{
     url: string;
     posterUrl: string;
+    spriteVttUrl?: string;
   } | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
@@ -30,6 +32,7 @@ export default function WatchPage() {
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [guestName, setGuestName] = useState("");
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
@@ -94,6 +97,7 @@ export default function WatchPage() {
         publicId,
         text: commentText.trim(),
         timestampSeconds: currentTime,
+        ...(!userId && { userName: guestName }),
       });
       setCommentText("");
     } catch {
@@ -126,7 +130,7 @@ export default function WatchPage() {
           </CardHeader>
           <CardContent>
             <Link to="/" preload="intent" className="block">
-              <Button variant="outline" className="w-full">Go to lawn</Button>
+              <Button variant="outline" className="w-full">Go to Snazzy Labs</Button>
             </Link>
           </CardContent>
         </Card>
@@ -146,7 +150,7 @@ export default function WatchPage() {
             to="/"
             className="text-[#888] hover:text-[#1a1a1a] text-sm flex items-center gap-2 font-bold"
           >
-            lawn
+            Snazzy Labs
           </Link>
           <div className="h-4 w-[2px] bg-[#1a1a1a]/20" />
           <h1 className="text-base font-black truncate max-w-[150px] sm:max-w-[300px]">{video.title}</h1>
@@ -181,6 +185,7 @@ export default function WatchPage() {
               ref={playerRef}
               src={playbackSession.url}
               poster={playbackSession.posterUrl}
+              spriteVttUrl={playbackSession.spriteVttUrl}
               comments={flattenedComments}
               onTimeUpdate={setCurrentTime}
               allowDownload={false}
@@ -259,35 +264,31 @@ export default function WatchPage() {
           </div>
           
           <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8] p-4">
-            {isUserLoaded && userId ? (
-              <form onSubmit={handleSubmitComment} className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-[#666]">
-                  <Clock className="h-3.5 w-3.5" />
-                  Comment at {formatTimestamp(currentTime)}
-                </div>
-                <Textarea
-                  value={commentText}
-                  onChange={(event) => setCommentText(event.target.value)}
-                  placeholder="Leave a comment..."
-                  className="min-h-[90px] text-sm"
+            <form onSubmit={handleSubmitComment} className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-[#666]">
+                <Clock className="h-3.5 w-3.5" />
+                Comment at {formatTimestamp(currentTime)}
+              </div>
+              {!userId && (
+                <Input
+                  value={guestName}
+                  onChange={(event) => setGuestName(event.target.value)}
+                  placeholder="Name / Company"
+                  className="text-sm"
                 />
-                {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
-                <Button type="submit" size="sm" disabled={!commentText.trim() || isSubmittingComment} className="w-full">
-                  <MessageSquare className="mr-1.5 h-4 w-4" />
-                  {isSubmittingComment ? "Posting..." : "Post comment"}
-                </Button>
-              </form>
-            ) : (
-              <a
-                href={`/sign-in?redirect_url=${encodeURIComponent(`/watch/${publicId}`)}`}
-                className="block"
-              >
-                <Button className="w-full">
-                  <MessageSquare className="mr-1.5 h-4 w-4" />
-                  Sign in to comment
-                </Button>
-              </a>
-            )}
+              )}
+              <Textarea
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+                placeholder="Leave a comment..."
+                className="min-h-[90px] text-sm"
+              />
+              {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
+              <Button type="submit" size="sm" disabled={!commentText.trim() || isSubmittingComment} className="w-full">
+                <MessageSquare className="mr-1.5 h-4 w-4" />
+                {isSubmittingComment ? "Posting..." : "Post comment"}
+              </Button>
+            </form>
           </div>
         </aside>
       </div>
@@ -368,35 +369,31 @@ export default function WatchPage() {
           </div>
           
           <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8] p-4 pb-safe">
-            {isUserLoaded && userId ? (
-              <form onSubmit={handleSubmitComment} className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-[#666]">
-                  <Clock className="h-3.5 w-3.5" />
-                  Comment at {formatTimestamp(currentTime)}
-                </div>
-                <Textarea
-                  value={commentText}
-                  onChange={(event) => setCommentText(event.target.value)}
-                  placeholder="Leave a comment..."
-                  className="min-h-[90px] text-sm"
+            <form onSubmit={handleSubmitComment} className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-[#666]">
+                <Clock className="h-3.5 w-3.5" />
+                Comment at {formatTimestamp(currentTime)}
+              </div>
+              {!userId && (
+                <Input
+                  value={guestName}
+                  onChange={(event) => setGuestName(event.target.value)}
+                  placeholder="Name / Company"
+                  className="text-sm"
                 />
-                {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
-                <Button type="submit" size="sm" disabled={!commentText.trim() || isSubmittingComment} className="w-full">
-                  <MessageSquare className="mr-1.5 h-4 w-4" />
-                  {isSubmittingComment ? "Posting..." : "Post comment"}
-                </Button>
-              </form>
-            ) : (
-              <a
-                href={`/sign-in?redirect_url=${encodeURIComponent(`/watch/${publicId}`)}`}
-                className="block"
-              >
-                <Button className="w-full">
-                  <MessageSquare className="mr-1.5 h-4 w-4" />
-                  Sign in to comment
-                </Button>
-              </a>
-            )}
+              )}
+              <Textarea
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+                placeholder="Leave a comment..."
+                className="min-h-[90px] text-sm"
+              />
+              {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
+              <Button type="submit" size="sm" disabled={!commentText.trim() || isSubmittingComment} className="w-full">
+                <MessageSquare className="mr-1.5 h-4 w-4" />
+                {isSubmittingComment ? "Posting..." : "Post comment"}
+              </Button>
+            </form>
           </div>
         </div>
       )}

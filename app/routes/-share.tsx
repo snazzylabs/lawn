@@ -31,6 +31,7 @@ export default function SharePage() {
   const [playbackSession, setPlaybackSession] = useState<{
     url: string;
     posterUrl: string;
+    spriteVttUrl?: string;
   } | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export default function SharePage() {
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [guestName, setGuestName] = useState("");
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
   const { shareInfo, videoData, comments } = useShareData({ token, grantToken });
@@ -148,6 +150,7 @@ export default function SharePage() {
         grantToken,
         text: commentText.trim(),
         timestampSeconds: currentTime,
+        ...(!userId && { userName: guestName }),
       });
       setCommentText("");
     } catch {
@@ -187,7 +190,7 @@ export default function SharePage() {
           <CardContent>
             <Link to="/" preload="intent" className="block">
               <Button variant="outline" className="w-full">
-                Go to lawn
+                Go to Snazzy Labs
               </Button>
             </Link>
           </CardContent>
@@ -266,7 +269,7 @@ export default function SharePage() {
             to="/"
             className="text-[#888] hover:text-[#1a1a1a] text-sm flex items-center gap-2 font-bold"
           >
-            lawn
+            Snazzy Labs
           </Link>
         </div>
       </header>
@@ -290,6 +293,7 @@ export default function SharePage() {
               ref={playerRef}
               src={playbackSession.url}
               poster={playbackSession.posterUrl}
+              spriteVttUrl={playbackSession.spriteVttUrl}
               comments={flattenedComments}
               onTimeUpdate={setCurrentTime}
               allowDownload={false}
@@ -320,35 +324,30 @@ export default function SharePage() {
             <span className="text-xs text-[#888] font-mono">{formatTimestamp(currentTime)}</span>
           </div>
 
-          {isUserLoaded && userId ? (
-            <form onSubmit={handleSubmitComment} className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-[#666]">
-                <Clock className="h-3.5 w-3.5" />
-                Comment at {formatTimestamp(currentTime)}
-              </div>
-              <Textarea
-                value={commentText}
-                onChange={(event) => setCommentText(event.target.value)}
-                placeholder="Leave a comment..."
-                className="min-h-[90px]"
+          <form onSubmit={handleSubmitComment} className="space-y-2">
+            <div className="flex items-center gap-2 text-xs text-[#666]">
+              <Clock className="h-3.5 w-3.5" />
+              Comment at {formatTimestamp(currentTime)}
+            </div>
+            {!userId && (
+              <Input
+                value={guestName}
+                onChange={(event) => setGuestName(event.target.value)}
+                placeholder="Name / Company"
               />
-              {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
-              <Button type="submit" disabled={!commentText.trim() || isSubmittingComment}>
-                <MessageSquare className="mr-1.5 h-4 w-4" />
-                {isSubmittingComment ? "Posting..." : "Post comment"}
-              </Button>
-            </form>
-          ) : (
-            <a
-              href={`/sign-in?redirect_url=${encodeURIComponent(`/share/${token}`)}`}
-              className="inline-flex"
-            >
-              <Button>
-                <MessageSquare className="mr-1.5 h-4 w-4" />
-                Sign in to comment
-              </Button>
-            </a>
-          )}
+            )}
+            <Textarea
+              value={commentText}
+              onChange={(event) => setCommentText(event.target.value)}
+              placeholder="Leave a comment..."
+              className="min-h-[90px]"
+            />
+            {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
+            <Button type="submit" disabled={!commentText.trim() || isSubmittingComment}>
+              <MessageSquare className="mr-1.5 h-4 w-4" />
+              {isSubmittingComment ? "Posting..." : "Post comment"}
+            </Button>
+          </form>
 
           {comments === undefined ? (
             <p className="text-sm text-[#888]">Loading comments...</p>
@@ -401,7 +400,7 @@ export default function SharePage() {
         <div className="max-w-6xl mx-auto text-center text-sm text-[#888]">
           Shared via{" "}
           <Link to="/" preload="intent" className="text-[#1a1a1a] hover:text-[#2d5a2d] font-bold">
-            lawn
+            Snazzy Labs
           </Link>
         </div>
       </footer>

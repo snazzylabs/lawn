@@ -5,6 +5,7 @@ import {
   identityName,
   requireVideoAccess,
   requireUser,
+  getUser,
 } from "./auth";
 import { resolveActiveShareGrant } from "./shareAccess";
 
@@ -117,9 +118,10 @@ export const createForPublic = mutation({
     endTimestampSeconds: v.optional(v.number()),
     drawingData: v.optional(v.string()),
     parentId: v.optional(v.id("comments")),
+    userName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
+    const user = await getUser(ctx);
     const video = await getPublicVideoByPublicId(ctx, args.publicId);
 
     if (!video) {
@@ -135,9 +137,9 @@ export const createForPublic = mutation({
 
     return await ctx.db.insert("comments", {
       videoId: video._id,
-      userClerkId: user.subject,
-      userName: identityName(user),
-      userAvatarUrl: identityAvatarUrl(user),
+      userClerkId: user ? user.subject : undefined,
+      userName: user ? identityName(user) : (args.userName?.trim() || "Guest"),
+      userAvatarUrl: user ? identityAvatarUrl(user) : undefined,
       text: args.text,
       timestampSeconds: args.timestampSeconds,
       endTimestampSeconds: args.endTimestampSeconds,
@@ -156,9 +158,10 @@ export const createForShareGrant = mutation({
     endTimestampSeconds: v.optional(v.number()),
     drawingData: v.optional(v.string()),
     parentId: v.optional(v.id("comments")),
+    userName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
+    const user = await getUser(ctx);
     const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
 
     if (!resolved) {
@@ -179,9 +182,9 @@ export const createForShareGrant = mutation({
 
     return await ctx.db.insert("comments", {
       videoId: video._id,
-      userClerkId: user.subject,
-      userName: identityName(user),
-      userAvatarUrl: identityAvatarUrl(user),
+      userClerkId: user ? user.subject : undefined,
+      userName: user ? identityName(user) : (args.userName?.trim() || "Guest"),
+      userAvatarUrl: user ? identityAvatarUrl(user) : undefined,
       text: args.text,
       timestampSeconds: args.timestampSeconds,
       endTimestampSeconds: args.endTimestampSeconds,
