@@ -1,17 +1,22 @@
 import { useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
+import { Id } from "@convex/_generated/dataModel";
 import { Link, useParams } from "@tanstack/react-router";
 import { useCurrentUser } from "@/lib/auth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VideoPlayer, type VideoPlayerHandle } from "@/components/video-player/VideoPlayer";
+import { DrawingCanvas, type DrawingCanvasHandle, type DrawingTool } from "@/components/video-player/DrawingCanvas";
+import { DrawingToolbar } from "@/components/video-player/DrawingToolbar";
+import { CommentInput } from "@/components/comments/CommentInput";
+import { GuestOnboardingDialog } from "@/components/comments/GuestOnboardingDialog";
+import { useGuestIdentity } from "@/lib/useGuestIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
-import { Lock, Video, AlertCircle, MessageSquare, Clock } from "lucide-react";
+import { Lock, Video, AlertCircle, MessageSquare, Pencil, Trash2 } from "lucide-react";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -19,8 +24,11 @@ export default function SharePage() {
   const token = params.token as string;
   const { isLoaded: isUserLoaded, id: userId } = useCurrentUser();
 
+  const { guest, setGuestIdentity, isReady: isGuestReady } = useGuestIdentity();
   const issueAccessGrant = useMutation(api.shareLinks.issueAccessGrant);
   const createComment = useMutation(api.comments.createForShareGrant);
+  const updateGuestComment = useMutation(api.comments.updateForGuest);
+  const removeGuestComment = useMutation(api.comments.removeForGuest);
   const getPlaybackSession = useAction(api.videoActions.getSharedPlaybackSession);
 
   const [grantToken, setGrantToken] = useState<string | null>(null);
@@ -36,13 +44,28 @@ export default function SharePage() {
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  const [commentText, setCommentText] = useState("");
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [commentError, setCommentError] = useState<string | null>(null);
-  const [guestName, setGuestName] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
-  const { shareInfo, videoData, comments } = useShareData({ token, grantToken });
+  // Drawing state
+  const [drawingMode, setDrawingMode] = useState(false);
+  const [drawingData, setDrawingData] = useState<string | null>(null);
+  const [drawingTool, setDrawingTool] = useState<DrawingTool>("pen");
+  const [drawingColor, setDrawingColor] = useState("#ef4444");
+  const drawingCanvasRef = useRef<DrawingCanvasHandle>(null);
+
+  // Range state
+  const [rangeMarker, setRangeMarker] = useState<{ inTime: number; outTime: number } | null>(null);
+
+  // Guest edit state
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+
+  const { shareInfo, videoData, comments } = useShareData({
+    token,
+    grantToken,
+    guestSessionId: guest?.guestId,
+  });
   const canTrackPresence = Boolean(playbackSession?.url && videoData?.video?._id);
   const { watchers } = useVideoPresence({
     videoId: videoData?.video?._id,
@@ -119,13 +142,14 @@ export default function SharePage() {
   }, [getPlaybackSession, grantToken]);
 
   const flattenedComments = useMemo(() => {
-    if (!comments) return [] as Array<{ _id: string; timestampSeconds: number; resolved: boolean }>;
+    if (!comments) return [] as Array<{ _id: string; timestampSeconds: number; endTimestampSeconds?: number; resolved: boolean }>;
 
-    const markers: Array<{ _id: string; timestampSeconds: number; resolved: boolean }> = [];
+    const markers: Array<{ _id: string; timestampSeconds: number; endTimestampSeconds?: number; resolved: boolean }> = [];
     for (const comment of comments) {
       markers.push({
         _id: comment._id,
         timestampSeconds: comment.timestampSeconds,
+        endTimestampSeconds: comment.endTimestampSeconds,
         resolved: comment.resolved,
       });
       for (const reply of comment.replies) {
@@ -139,26 +163,70 @@ export default function SharePage() {
     return markers;
   }, [comments]);
 
-  const handleSubmitComment = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!grantToken || !commentText.trim() || isSubmittingComment) return;
+  const handleCommentAreaClick = useCallback(() => {
+    if (!userId && !guest) {
+      setShowOnboarding(true);
+    }
+  }, [userId, guest]);
 
-    setIsSubmittingComment(true);
-    setCommentError(null);
-    try {
+  const handleOnboardingComplete = useCallback(
+    (name: string, company?: string) => {
+      setGuestIdentity(name, company);
+      setShowOnboarding(false);
+    },
+    [setGuestIdentity],
+  );
+
+  const handleSubmitComment = useCallback(
+    async (args: {
+      text: string;
+      timestampSeconds: number;
+      endTimestampSeconds?: number;
+      drawingData?: string;
+      parentId?: Id<"comments">;
+    }) => {
+      if (!grantToken) return;
       await createComment({
         grantToken,
-        text: commentText.trim(),
-        timestampSeconds: currentTime,
-        ...(!userId && { userName: guestName }),
+        text: args.text,
+        timestampSeconds: args.timestampSeconds,
+        endTimestampSeconds: args.endTimestampSeconds,
+        drawingData: args.drawingData,
+        parentId: args.parentId,
+        userName: guest?.name,
+        guestSessionId: guest?.guestId,
       });
-      setCommentText("");
-    } catch {
-      setCommentError("Failed to post comment.");
-    } finally {
-      setIsSubmittingComment(false);
-    }
-  };
+      setDrawingData(null);
+    },
+    [createComment, grantToken, guest],
+  );
+
+  const handleEditSave = useCallback(
+    async (commentId: string) => {
+      if (!editingText.trim() || !guest?.guestId) return;
+      await updateGuestComment({
+        commentId: commentId as Id<"comments">,
+        guestSessionId: guest.guestId,
+        text: editingText.trim(),
+      });
+      setEditingCommentId(null);
+      setEditingText("");
+    },
+    [editingText, guest, updateGuestComment],
+  );
+
+  const handleDelete = useCallback(
+    async (commentId: string) => {
+      if (!guest?.guestId) return;
+      await removeGuestComment({
+        commentId: commentId as Id<"comments">,
+        guestSessionId: guest.guestId,
+      });
+    },
+    [guest, removeGuestComment],
+  );
+
+  const canComment = Boolean(userId || guest);
 
   const isBootstrappingShare =
     shareInfo === undefined ||
@@ -260,6 +328,178 @@ export default function SharePage() {
 
   const video = videoData.video;
 
+  const renderComment = (
+    comment: {
+      _id: string;
+      userName: string;
+      text: string;
+      timestampSeconds: number;
+      endTimestampSeconds?: number;
+      drawingData?: string;
+      _creationTime: number;
+      isGuestOwned?: boolean;
+      replies: Array<{
+        _id: string;
+        userName: string;
+        text: string;
+        timestampSeconds: number;
+        _creationTime: number;
+        isGuestOwned?: boolean;
+      }>;
+    },
+  ) => (
+    <article key={comment._id} className="border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-bold text-[#1a1a1a]">{comment.userName}</div>
+        <div className="flex items-center gap-2">
+          {comment.isGuestOwned && editingCommentId !== comment._id && (
+            <>
+              <button
+                type="button"
+                className="text-[#888] hover:text-[#1a1a1a]"
+                onClick={() => {
+                  setEditingCommentId(comment._id);
+                  setEditingText(comment.text);
+                }}
+                title="Edit"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                className="text-[#888] hover:text-[#dc2626]"
+                onClick={() => void handleDelete(comment._id)}
+                title="Delete"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+            onClick={() => playerRef.current?.seekTo(comment.timestampSeconds, { play: true })}
+          >
+            {formatTimestamp(comment.timestampSeconds)}
+            {comment.endTimestampSeconds != null && (
+              <> – {formatTimestamp(comment.endTimestampSeconds)}</>
+            )}
+          </button>
+        </div>
+      </div>
+      {editingCommentId === comment._id ? (
+        <div className="mt-1 space-y-1">
+          <textarea
+            value={editingText}
+            onChange={(e) => setEditingText(e.target.value)}
+            className="w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm focus:outline-none"
+            rows={2}
+          />
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => void handleEditSave(comment._id)}
+              disabled={!editingText.trim()}
+            >
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setEditingCommentId(null)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap">{comment.text}</p>
+      )}
+      {comment.drawingData && (
+        <img
+          src={comment.drawingData}
+          alt="Drawing annotation"
+          className="mt-2 border border-[#ccc] max-h-32 w-auto"
+        />
+      )}
+      <p className="text-[11px] text-[#888] mt-1">{formatRelativeTime(comment._creationTime)}</p>
+
+      {comment.replies.length > 0 ? (
+        <div className="mt-3 ml-4 border-l-2 border-[#1a1a1a] pl-3 space-y-2">
+          {comment.replies.map((reply) => (
+            <div key={reply._id} className="text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
+                <div className="flex items-center gap-2">
+                  {reply.isGuestOwned && editingCommentId !== reply._id && (
+                    <>
+                      <button
+                        type="button"
+                        className="text-[#888] hover:text-[#1a1a1a]"
+                        onClick={() => {
+                          setEditingCommentId(reply._id);
+                          setEditingText(reply.text);
+                        }}
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[#888] hover:text-[#dc2626]"
+                        onClick={() => void handleDelete(reply._id)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+                    onClick={() => playerRef.current?.seekTo(reply.timestampSeconds, { play: true })}
+                  >
+                    {formatTimestamp(reply.timestampSeconds)}
+                  </button>
+                </div>
+              </div>
+              {editingCommentId === reply._id ? (
+                <div className="mt-1 space-y-1">
+                  <textarea
+                    value={editingText}
+                    onChange={(e) => setEditingText(e.target.value)}
+                    className="w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm focus:outline-none"
+                    rows={2}
+                  />
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => void handleEditSave(reply._id)}
+                      disabled={!editingText.trim()}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingCommentId(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[#1a1a1a] whitespace-pre-wrap">{reply.text}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+
   return (
     <div className="min-h-screen bg-[#f0f0e8]">
       <header className="bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-6 py-4">
@@ -271,6 +511,11 @@ export default function SharePage() {
           >
             Snazzy Labs
           </Link>
+          {guest && !userId && (
+            <span className="text-[11px] font-medium text-[#888]">
+              {guest.name}{guest.company ? ` · ${guest.company}` : ""}
+            </span>
+          )}
         </div>
       </header>
 
@@ -287,17 +532,46 @@ export default function SharePage() {
           </div>
         </div>
 
-        <div className="border-2 border-[#1a1a1a] overflow-hidden">
+        <div className="border-2 border-[#1a1a1a] overflow-hidden relative">
           {playbackSession?.url ? (
-            <VideoPlayer
-              ref={playerRef}
-              src={playbackSession.url}
-              poster={playbackSession.posterUrl}
-              spriteVttUrl={playbackSession.spriteVttUrl}
-              comments={flattenedComments}
-              onTimeUpdate={setCurrentTime}
-              allowDownload={false}
-            />
+            <>
+              <VideoPlayer
+                ref={playerRef}
+                src={playbackSession.url}
+                poster={playbackSession.posterUrl}
+                spriteVttUrl={playbackSession.spriteVttUrl}
+                comments={flattenedComments}
+                onTimeUpdate={setCurrentTime}
+                allowDownload={false}
+                rangeMarker={rangeMarker ?? undefined}
+                maxQualityHeight={!userId ? 720 : undefined}
+              />
+              {drawingMode && (
+                <>
+                  <DrawingCanvas
+                    ref={drawingCanvasRef}
+                    tool={drawingTool}
+                    color={drawingColor}
+                    lineWidth={3}
+                    active
+                    className="z-30"
+                  />
+                  <DrawingToolbar
+                    tool={drawingTool}
+                    color={drawingColor}
+                    onToolChange={setDrawingTool}
+                    onColorChange={setDrawingColor}
+                    onUndo={() => drawingCanvasRef.current?.undo()}
+                    onClear={() => drawingCanvasRef.current?.clear()}
+                    onDone={() => {
+                      const data = drawingCanvasRef.current?.toDataURL() ?? null;
+                      setDrawingData(data);
+                      setDrawingMode(false);
+                    }}
+                  />
+                </>
+              )}
+            </>
           ) : (
             <div className="relative aspect-video overflow-hidden rounded-xl border border-zinc-800/80 bg-black shadow-[0_10px_40px_rgba(0,0,0,0.45)]">
               {(playbackSession?.posterUrl || video.thumbnailUrl?.startsWith("http")) ? (
@@ -324,30 +598,28 @@ export default function SharePage() {
             <span className="text-xs text-[#888] font-mono">{formatTimestamp(currentTime)}</span>
           </div>
 
-          <form onSubmit={handleSubmitComment} className="space-y-2">
-            <div className="flex items-center gap-2 text-xs text-[#666]">
-              <Clock className="h-3.5 w-3.5" />
-              Comment at {formatTimestamp(currentTime)}
-            </div>
-            {!userId && (
-              <Input
-                value={guestName}
-                onChange={(event) => setGuestName(event.target.value)}
-                placeholder="Name / Company"
+          <div onClick={!canComment ? handleCommentAreaClick : undefined}>
+            {canComment ? (
+              <CommentInput
+                timestampSeconds={currentTime}
+                showTimestamp
+                onSubmitComment={userId ? undefined : handleSubmitComment}
+                videoId={userId ? video._id : undefined}
+                onRangeChange={setRangeMarker}
+                externalRange={rangeMarker}
+                onDrawingRequest={() => setDrawingMode(true)}
+                drawingData={drawingData}
               />
+            ) : (
+              <button
+                type="button"
+                onClick={handleCommentAreaClick}
+                className="w-full text-left border-2 border-[#1a1a1a] bg-[#f0f0e8] px-3 py-3 text-sm text-[#888] hover:text-[#1a1a1a] transition-colors"
+              >
+                Click to leave feedback...
+              </button>
             )}
-            <Textarea
-              value={commentText}
-              onChange={(event) => setCommentText(event.target.value)}
-              placeholder="Leave a comment..."
-              className="min-h-[90px]"
-            />
-            {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
-            <Button type="submit" disabled={!commentText.trim() || isSubmittingComment}>
-              <MessageSquare className="mr-1.5 h-4 w-4" />
-              {isSubmittingComment ? "Posting..." : "Post comment"}
-            </Button>
-          </form>
+          </div>
 
           {comments === undefined ? (
             <p className="text-sm text-[#888]">Loading comments...</p>
@@ -355,42 +627,7 @@ export default function SharePage() {
             <p className="text-sm text-[#888]">No comments yet.</p>
           ) : (
             <div className="space-y-3">
-              {comments.map((comment) => (
-                <article key={comment._id} className="border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-bold text-[#1a1a1a]">{comment.userName}</div>
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
-                      onClick={() => playerRef.current?.seekTo(comment.timestampSeconds, { play: true })}
-                    >
-                      {formatTimestamp(comment.timestampSeconds)}
-                    </button>
-                  </div>
-                  <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap">{comment.text}</p>
-                  <p className="text-[11px] text-[#888] mt-1">{formatRelativeTime(comment._creationTime)}</p>
-
-                  {comment.replies.length > 0 ? (
-                    <div className="mt-3 ml-4 border-l-2 border-[#1a1a1a] pl-3 space-y-2">
-                      {comment.replies.map((reply) => (
-                        <div key={reply._id} className="text-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
-                            <button
-                              type="button"
-                              className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
-                              onClick={() => playerRef.current?.seekTo(reply.timestampSeconds, { play: true })}
-                            >
-                              {formatTimestamp(reply.timestampSeconds)}
-                            </button>
-                          </div>
-                          <p className="text-[#1a1a1a] whitespace-pre-wrap">{reply.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </article>
-              ))}
+              {comments.map((comment) => renderComment(comment))}
             </div>
           )}
         </section>
@@ -404,6 +641,12 @@ export default function SharePage() {
           </Link>
         </div>
       </footer>
+
+      <GuestOnboardingDialog
+        open={showOnboarding}
+        onOpenChange={setShowOnboarding}
+        onComplete={handleOnboardingComplete}
+      />
     </div>
   );
 }

@@ -124,6 +124,7 @@ export default defineSchema({
     drawingData: v.optional(v.string()),
     parentId: v.optional(v.id("comments")),
     resolved: v.boolean(),
+    guestSessionId: v.optional(v.string()),
   })
     .index("by_video", ["videoId"])
     .index("by_video_and_timestamp", ["videoId", "timestampSeconds"])

@@ -13,7 +13,7 @@ export function getShareEssentialSpecs(params: { token: string }) {
   ];
 }
 
-export function useShareData(params: { token: string; grantToken?: string | null }) {
+export function useShareData(params: { token: string; grantToken?: string | null; guestSessionId?: string }) {
   const shareInfo = useQuery(api.shareLinks.getByToken, {
     token: params.token,
   });
@@ -25,7 +25,9 @@ export function useShareData(params: { token: string; grantToken?: string | null
 
   const comments = useQuery(
     api.comments.getThreadedForShareGrant,
-    params.grantToken ? { grantToken: params.grantToken } : "skip",
+    params.grantToken
+      ? { grantToken: params.grantToken, guestSessionId: params.guestSessionId }
+      : "skip",
   );
 
   return { shareInfo, videoData, comments };

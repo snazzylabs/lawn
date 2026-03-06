@@ -24,25 +24,38 @@ function toThreadedComments<T extends { _id: string; parentId?: string; timestam
   }));
 }
 
-function toPublicCommentPayload(comment: {
-  _id: string;
-  _creationTime: number;
-  text: string;
-  timestampSeconds: number;
-  parentId?: string;
-  resolved: boolean;
-  userName: string;
-  userAvatarUrl?: string;
-}) {
+function toPublicCommentPayload(
+  comment: {
+    _id: string;
+    _creationTime: number;
+    text: string;
+    timestampSeconds: number;
+    endTimestampSeconds?: number;
+    drawingData?: string;
+    parentId?: string;
+    resolved: boolean;
+    userName: string;
+    userAvatarUrl?: string;
+    guestSessionId?: string;
+  },
+  guestSessionId?: string,
+) {
   return {
     _id: comment._id,
     _creationTime: comment._creationTime,
     text: comment.text,
     timestampSeconds: comment.timestampSeconds,
+    endTimestampSeconds: comment.endTimestampSeconds,
+    drawingData: comment.drawingData,
     parentId: comment.parentId,
     resolved: comment.resolved,
     userName: comment.userName,
     userAvatarUrl: comment.userAvatarUrl,
+    isGuestOwned: Boolean(
+      guestSessionId &&
+        comment.guestSessionId &&
+        comment.guestSessionId === guestSessionId,
+    ),
   };
 }
 
@@ -119,6 +132,7 @@ export const createForPublic = mutation({
     drawingData: v.optional(v.string()),
     parentId: v.optional(v.id("comments")),
     userName: v.optional(v.string()),
+    guestSessionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getUser(ctx);
@@ -146,6 +160,7 @@ export const createForPublic = mutation({
       drawingData: args.drawingData,
       parentId: args.parentId,
       resolved: false,
+      guestSessionId: user ? undefined : args.guestSessionId,
     });
   },
 });
@@ -159,6 +174,7 @@ export const createForShareGrant = mutation({
     drawingData: v.optional(v.string()),
     parentId: v.optional(v.id("comments")),
     userName: v.optional(v.string()),
+    guestSessionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getUser(ctx);
@@ -191,7 +207,63 @@ export const createForShareGrant = mutation({
       drawingData: args.drawingData,
       parentId: args.parentId,
       resolved: false,
+      guestSessionId: user ? undefined : args.guestSessionId,
     });
+  },
+});
+
+export const updateForGuest = mutation({
+  args: {
+    commentId: v.id("comments"),
+    guestSessionId: v.string(),
+    text: v.optional(v.string()),
+    timestampSeconds: v.optional(v.number()),
+    endTimestampSeconds: v.optional(v.number()),
+    drawingData: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+
+    if (!comment.guestSessionId || comment.guestSessionId !== args.guestSessionId) {
+      throw new Error("You can only edit your own comments");
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (args.text !== undefined) patch.text = args.text;
+    if (args.timestampSeconds !== undefined) patch.timestampSeconds = args.timestampSeconds;
+    if (args.endTimestampSeconds !== undefined) patch.endTimestampSeconds = args.endTimestampSeconds;
+    if (args.drawingData !== undefined) patch.drawingData = args.drawingData;
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(args.commentId, patch);
+    }
+  },
+});
+
+export const removeForGuest = mutation({
+  args: {
+    commentId: v.id("comments"),
+    guestSessionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+
+    if (!comment.guestSessionId || comment.guestSessionId !== args.guestSessionId) {
+      throw new Error("You can only delete your own comments");
+    }
+
+    const replies = await ctx.db
+      .query("comments")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.commentId))
+      .collect();
+
+    for (const reply of replies) {
+      await ctx.db.delete(reply._id);
+    }
+
+    await ctx.db.delete(args.commentId);
   },
 });
 
@@ -277,7 +349,10 @@ export const getThreaded = query({
 });
 
 export const getThreadedForPublic = query({
-  args: { publicId: v.string() },
+  args: {
+    publicId: v.string(),
+    guestSessionId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const video = await getPublicVideoByPublicId(ctx, args.publicId);
     if (!video) {
@@ -289,12 +364,17 @@ export const getThreadedForPublic = query({
       .withIndex("by_video", (q) => q.eq("videoId", video._id))
       .collect();
 
-    return toThreadedComments(comments.map(toPublicCommentPayload));
+    return toThreadedComments(
+      comments.map((c) => toPublicCommentPayload(c, args.guestSessionId)),
+    );
   },
 });
 
 export const getThreadedForShareGrant = query({
-  args: { grantToken: v.string() },
+  args: {
+    grantToken: v.string(),
+    guestSessionId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
     if (!resolved) {
@@ -311,6 +391,8 @@ export const getThreadedForShareGrant = query({
       .withIndex("by_video", (q) => q.eq("videoId", video._id))
       .collect();
 
-    return toThreadedComments(comments.map(toPublicCommentPayload));
+    return toThreadedComments(
+      comments.map((c) => toPublicCommentPayload(c, args.guestSessionId)),
+    );
   },
 });

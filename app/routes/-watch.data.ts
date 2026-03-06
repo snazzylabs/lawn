@@ -16,13 +16,14 @@ export function getWatchEssentialSpecs(params: { publicId: string }) {
   ];
 }
 
-export function useWatchData(params: { publicId: string }) {
+export function useWatchData(params: { publicId: string; guestSessionId?: string }) {
   const videoData = useQuery(api.videos.getByPublicId, {
     publicId: params.publicId,
   });
 
   const comments = useQuery(api.comments.getThreadedForPublic, {
     publicId: params.publicId,
+    guestSessionId: params.guestSessionId,
   });
 
   return { videoData, comments };

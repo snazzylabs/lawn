@@ -9,7 +9,7 @@ import { formatTimestamp, formatTimestampInput, parseTimestampInput } from "@/li
 import { Send, X, Scissors, Pencil } from "lucide-react";
 
 interface CommentInputProps {
-  videoId: Id<"videos">;
+  videoId?: Id<"videos">;
   timestampSeconds: number;
   parentId?: Id<"comments">;
   onSubmit?: () => void;
@@ -22,6 +22,13 @@ interface CommentInputProps {
   externalRange?: { inTime: number; outTime: number } | null;
   onDrawingRequest?: () => void;
   drawingData?: string | null;
+  onSubmitComment?: (args: {
+    text: string;
+    timestampSeconds: number;
+    endTimestampSeconds?: number;
+    drawingData?: string;
+    parentId?: Id<"comments">;
+  }) => Promise<void>;
 }
 
 export function CommentInput({
@@ -38,6 +45,7 @@ export function CommentInput({
   externalRange,
   onDrawingRequest,
   drawingData,
+  onSubmitComment,
 }: CommentInputProps) {
   const [text, setText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -107,14 +115,18 @@ export function CommentInput({
     try {
       const parsedIn = rangeMode ? parseTimestampInput(inTime) : null;
       const parsedOut = rangeMode ? parseTimestampInput(outTime) : null;
-      await createComment({
-        videoId,
+      const payload = {
         text: text.trim(),
         timestampSeconds: parsedIn ?? timestampSeconds,
         ...(parsedOut !== null ? { endTimestampSeconds: parsedOut } : {}),
         ...(drawingData ? { drawingData } : {}),
         parentId,
-      });
+      };
+      if (onSubmitComment) {
+        await onSubmitComment(payload);
+      } else {
+        await createComment({ videoId: videoId!, ...payload });
+      }
       setText("");
       setRangeMode(false);
       setInTime("");

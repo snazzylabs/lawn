@@ -72,6 +72,8 @@ interface VideoPlayerProps {
   /** Range editing: in/out handles */
   rangeMarker?: { inTime: number; outTime: number };
   onRangeMarkerDrag?: (handle: "in" | "out", time: number) => void;
+  /** Cap auto-quality to this max height (e.g. 720 for guests). */
+  maxQualityHeight?: number;
 }
 
 export interface VideoPlayerHandle {
@@ -117,6 +119,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     onEditingMarkerDrag,
     rangeMarker,
     onRangeMarkerDrag,
+    maxQualityHeight,
   },
   ref
 ) {
@@ -689,6 +692,20 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               }));
             setQualityOptions(nextOptions);
             setSelectedQualityLevel(AUTO_QUALITY_LEVEL);
+
+            if (maxQualityHeight) {
+              const cap = hls.levels.reduce(
+                (best, lvl, i) =>
+                  lvl.height <= maxQualityHeight &&
+                  (best === -1 || lvl.height > hls.levels[best].height)
+                    ? i
+                    : best,
+                -1,
+              );
+              if (cap !== -1) {
+                hls.autoLevelCapping = cap;
+              }
+            }
           });
           hls.on(Hls.Events.LEVEL_SWITCHED, () => {
             if (hls.autoLevelEnabled) {
