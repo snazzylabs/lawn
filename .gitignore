@@ -51,3 +51,10 @@ next-env.d.ts
 
 # convex temp (docker)
 .convex-tmp
+
+# secrets & credentials — never commit these
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
