@@ -6,10 +6,12 @@ import SignInPage from "./auth/-sign-in";
 export const Route = createFileRoute("/sign-in")({
   head: () =>
     seoHead({
-      title: "Sign in",
-      description: "Sign in to your lawn account.",
+      title: "Access",
+      description: "Restricted access portal.",
       path: "/sign-in",
       noIndex: true,
+      appendSiteName: false,
+      siteName: "Workspace",
     }),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_url:

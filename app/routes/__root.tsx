@@ -19,14 +19,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "lawn — video review for creative teams" },
+      { title: "Workspace" },
       {
         name: "description",
-        content:
-          "Video review and collaboration for creative teams. Frame-accurate comments, unlimited seats, $5/month flat. The open source Frame.io alternative.",
+        content: "Restricted access portal.",
       },
-      { property: "og:site_name", content: "lawn" },
-      { name: "twitter:site", content: "@theo" },
+      {
+        name: "robots",
+        content: "noindex,nofollow,noarchive,nosnippet,max-image-preview:none",
+      },
+      { property: "og:site_name", content: "Workspace" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

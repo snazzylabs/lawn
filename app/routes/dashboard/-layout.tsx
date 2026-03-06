@@ -51,6 +51,7 @@ export default function DashboardLayout() {
   const { isLoading, isAuthenticated } = useAuthState();
   const isLoaded = !isLoading;
   const userId = isAuthenticated ? "authenticated" : null;
+  const teams = useQuery(api.teams.list, userId ? {} : "skip");
   const location = useLocation();
   const { pathname, searchStr } = location;
   const params = useParams({ strict: false });
@@ -200,6 +201,8 @@ export default function DashboardLayout() {
   );
   const isResolvingPublicPlaybackExemption =
     Boolean(isLoaded && !userId && routeVideoId) && publicPlaybackId === undefined;
+  const isCheckingMembership = Boolean(userId) && teams === undefined;
+  const hasTeamMembership = (teams?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!isLoaded || userId) return;
@@ -232,6 +235,40 @@ export default function DashboardLayout() {
           {isResolvingPublicPlaybackExemption
             ? "Checking public playback access..."
             : "Redirecting to sign in..."}
+        </div>
+      </div>
+    );
+  }
+
+  if (isCheckingMembership) {
+    return (
+      <div className="h-full flex items-center justify-center bg-[#f0f0e8]">
+        <div className="text-[#888]">Checking workspace access...</div>
+      </div>
+    );
+  }
+
+  if (!hasTeamMembership) {
+    return (
+      <div className="h-full bg-[#f0f0e8] flex items-center justify-center px-4">
+        <div className="max-w-md w-full border border-[#1a1a1a]/20 bg-white/70 p-8 text-center">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#6b7280]">
+            Access Restricted
+          </p>
+          <h1 className="mt-3 text-xl font-semibold text-[#111827]">
+            Team membership required
+          </h1>
+          <p className="mt-3 text-sm text-[#4b5563]">
+            Your authenticated account is not an active Snazzy Labs team member.
+          </p>
+          <div className="mt-6">
+            <Link
+              to="/"
+              className="inline-flex items-center justify-center border border-[#111827] px-4 py-2 text-sm font-semibold text-[#111827] hover:bg-[#f3f4f6]"
+            >
+              Back to entry
+            </Link>
+          </div>
         </div>
       </div>
     );

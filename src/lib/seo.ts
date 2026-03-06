@@ -1,7 +1,6 @@
-const SITE_URL = "https://lawn.video";
-const SITE_NAME = "lawn";
+const SITE_URL = "https://proof.snazzylabs.com";
+const SITE_NAME = "Snazzy Labs";
 const DEFAULT_OG_IMAGE = "/og/default.png";
-const TWITTER_HANDLE = "@theo";
 
 type SeoOptions = {
   title: string;
@@ -10,6 +9,8 @@ type SeoOptions = {
   ogImage?: string;
   type?: string;
   noIndex?: boolean;
+  appendSiteName?: boolean;
+  siteName?: string;
 };
 
 export function seoHead({
@@ -19,10 +20,13 @@ export function seoHead({
   ogImage = DEFAULT_OG_IMAGE,
   type = "website",
   noIndex = false,
+  appendSiteName = true,
+  siteName = SITE_NAME,
 }: SeoOptions) {
-  const fullTitle = title.toLowerCase().includes("lawn")
-    ? title
-    : `${title} | lawn`;
+  const fullTitle =
+    appendSiteName && !title.toLowerCase().includes("snazzy")
+      ? `${title} | ${SITE_NAME}`
+      : title;
   const url = `${SITE_URL}${path}`;
   const imageUrl = ogImage.startsWith("http")
     ? ogImage
@@ -37,17 +41,19 @@ export function seoHead({
     { property: "og:image", content: imageUrl },
     { property: "og:url", content: url },
     { property: "og:type", content: type },
-    { property: "og:site_name", content: SITE_NAME },
+    { property: "og:site_name", content: siteName },
     // Twitter
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: fullTitle },
     { name: "twitter:description", content: description },
     { name: "twitter:image", content: imageUrl },
-    { name: "twitter:site", content: TWITTER_HANDLE },
   ];
 
   if (noIndex) {
-    meta.push({ name: "robots", content: "noindex,nofollow" });
+    meta.push({
+      name: "robots",
+      content: "noindex,nofollow,noarchive,nosnippet,max-image-preview:none",
+    });
   }
 
   const links = [{ rel: "canonical", href: url }];
