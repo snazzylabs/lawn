@@ -1,6 +1,6 @@
 # Snazzy Labs Proofing Portal
 
-Snazzy Labs' internal and client-facing video proofing app, built on top of [Lawn](https://github.com/jakkuh/lawn).
+Snazzy Labs' internal and client-facing video proofing app, built on top of [Jakkuh's fork of Lawn](https://github.com/jakkuh/lawn), which is based on [Theo/Ping's original Lawn](https://github.com/pingdotgg/lawn).
 
 ## Current Product Scope
 
@@ -43,7 +43,7 @@ Snazzy Labs' internal and client-facing video proofing app, built on top of [Law
 
 ## Attribution
 
-See [ATTRIBUTION.md](./ATTRIBUTION.md). This project builds on [Lawn](https://github.com/jakkuh/lawn), MIT-licensed by Ping Labs.
+See [ATTRIBUTION.md](./ATTRIBUTION.md). This project builds on [Jakkuh's fork](https://github.com/jakkuh/lawn) of [Theo/Ping's original Lawn](https://github.com/pingdotgg/lawn), MIT-licensed by Ping Labs.
 
 ## License
 
