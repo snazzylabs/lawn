@@ -32,7 +32,7 @@ export function UserMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-8 h-8 border-2 border-[#1a1a1a] bg-[#1a1a1a] text-[#f0f0e8] flex items-center justify-center font-mono font-bold text-xs hover:bg-[#2d5a2d] transition-colors"
+        className="w-8 h-8 border-2 border-[#1a1a1a] bg-[#1a1a1a] text-[#f0f0e8] flex items-center justify-center font-mono font-bold text-xs hover:bg-[#2F6DB4] transition-colors"
       >
         {user.imageUrl ? (
           <img

@@ -59,7 +59,7 @@ export function DropZone({ onFilesSelected, disabled, className }: DropZoneProps
       className={cn(
         "relative border-2 border-dashed p-12 text-center transition-all",
         isDragActive
-          ? "border-[#2d5a2d] bg-[#2d5a2d]/5"
+          ? "border-[#2F6DB4] bg-[#2F6DB4]/5"
           : "border-[#1a1a1a] hover:border-[#888] bg-[#f0f0e8]",
         disabled && "opacity-40 cursor-not-allowed",
         className
@@ -82,7 +82,7 @@ export function DropZone({ onFilesSelected, disabled, className }: DropZoneProps
           className={cn(
             "w-14 h-14 flex items-center justify-center transition-colors border-2 border-[#1a1a1a]",
             isDragActive
-              ? "bg-[#2d5a2d] text-[#f0f0e8]"
+              ? "bg-[#2F6DB4] text-[#f0f0e8]"
               : "bg-[#e8e8e0] text-[#888]"
           )}
         >

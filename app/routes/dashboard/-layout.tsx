@@ -286,7 +286,7 @@ export default function DashboardLayout() {
       {isGlobalDragActive && (
         <div className="pointer-events-none fixed inset-0 z-40">
           <div className="absolute inset-0 bg-[#1a1a1a]/20" />
-          <div className="absolute inset-4 border-4 border-dashed border-[#2d5a2d] bg-[#2d5a2d]/10 flex items-center justify-center">
+          <div className="absolute inset-4 border-4 border-dashed border-[#2F6DB4] bg-[#2F6DB4]/10 flex items-center justify-center">
             <p className="border-2 border-[#1a1a1a] bg-[#f0f0e8] px-4 py-2 text-sm font-bold text-[#1a1a1a]">
               Drop videos to upload
             </p>

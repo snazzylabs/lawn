@@ -48,13 +48,12 @@ export const create = mutation({
       counter++;
     }
 
-    const isSelfHostedMode = !process.env.STRIPE_SECRET_KEY;
     const teamId = await ctx.db.insert("teams", {
       name: args.name,
       slug,
       ownerClerkId: user.subject,
-      plan: isSelfHostedMode ? "pro" : "basic",
-      billingStatus: isSelfHostedMode ? "active" : "not_subscribed",
+      plan: "pro",
+      billingStatus: "active",
     });
 
     await ctx.db.insert("teamMembers", {

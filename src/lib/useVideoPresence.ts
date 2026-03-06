@@ -5,7 +5,8 @@ import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY_CLIENT_ID = "lawn.presence.client_id";
+const STORAGE_KEY_CLIENT_ID = "snazzy.presence.client_id";
+const LEGACY_STORAGE_KEY_CLIENT_ID = "lawn.presence.client_id";
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
 const DISCONNECT_PATH = "videoPresence:disconnect";
 
@@ -25,6 +26,13 @@ function getOrCreateClientId() {
   const existing = window.localStorage.getItem(STORAGE_KEY_CLIENT_ID);
   if (existing && existing.trim().length > 0) {
     return existing;
+  }
+
+  // Migration: read from legacy key
+  const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY_CLIENT_ID);
+  if (legacy && legacy.trim().length > 0) {
+    window.localStorage.setItem(STORAGE_KEY_CLIENT_ID, legacy);
+    return legacy;
   }
 
   const clientId = createClientId();

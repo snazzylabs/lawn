@@ -9,9 +9,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[#1a1a1a] text-[#f0f0e8] hover:bg-[#2d5a2d] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
+          "bg-[#1a1a1a] text-[#f0f0e8] hover:bg-[#2F6DB4] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         primary:
-          "bg-[#2d5a2d] text-[#f0f0e8] hover:bg-[#3a6a3a] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
+          "bg-[#2F6DB4] text-[#f0f0e8] hover:bg-[#4DA7F8] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         destructive:
           "bg-[#dc2626] text-white hover:bg-[#b91c1c] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         outline:
@@ -21,7 +21,7 @@ const buttonVariants = cva(
         ghost:
           "text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f0f0e8] border-2 border-transparent hover:border-[#1a1a1a] hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:-translate-y-[2px] hover:-translate-x-[2px]",
         link:
-          "text-[#1a1a1a] underline underline-offset-4 hover:text-[#2d5a2d]",
+          "text-[#1a1a1a] underline underline-offset-4 hover:text-[#2F6DB4]",
       },
       size: {
         default: "h-10 px-5 py-2",

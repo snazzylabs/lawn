@@ -17,6 +17,8 @@ import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { Lock, Video, AlertCircle, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
+import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -72,6 +74,29 @@ export default function SharePage() {
     enabled: canTrackPresence,
     shareToken: token,
   });
+
+  // Auto-open onboarding for first-time guests once grant is set
+  useEffect(() => {
+    if (isGuestReady && isUserLoaded && !userId && !guest && grantToken) {
+      setShowOnboarding(true);
+    }
+  }, [isGuestReady, isUserLoaded, userId, guest, grantToken]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        setRangeMarker((prev) => prev ? { ...prev, inTime: currentTime } : { inTime: currentTime, outTime: currentTime + 5 });
+      } else if (e.key === "o" || e.key === "O") {
+        e.preventDefault();
+        setRangeMarker((prev) => prev ? { ...prev, outTime: currentTime } : { inTime: Math.max(0, currentTime - 5), outTime: currentTime });
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentTime]);
 
   useEffect(() => {
     setGrantToken(null);
@@ -177,6 +202,9 @@ export default function SharePage() {
     [setGuestIdentity],
   );
 
+  const getAttachmentUploadUrl = useAction(api.videoActions.getAttachmentUploadUrl);
+  const createAttachmentMut = useMutation(api.comments.createAttachment);
+
   const handleSubmitComment = useCallback(
     async (args: {
       text: string;
@@ -184,9 +212,10 @@ export default function SharePage() {
       endTimestampSeconds?: number;
       drawingData?: string;
       parentId?: Id<"comments">;
+      files?: File[];
     }) => {
       if (!grantToken) return;
-      await createComment({
+      const commentId = await createComment({
         grantToken,
         text: args.text,
         timestampSeconds: args.timestampSeconds,
@@ -195,10 +224,27 @@ export default function SharePage() {
         parentId: args.parentId,
         userName: guest?.name,
         guestSessionId: guest?.guestId,
+        userCompany: guest?.company,
       });
+      if (args.files?.length && commentId) {
+        for (const file of args.files) {
+          try {
+            const { url, s3Key } = await getAttachmentUploadUrl({
+              commentId,
+              filename: file.name,
+              fileSize: file.size,
+              contentType: file.type || "application/octet-stream",
+            });
+            await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+            await createAttachmentMut({ commentId, s3Key, filename: file.name, fileSize: file.size, contentType: file.type || "application/octet-stream" });
+          } catch (e) {
+            console.error("Failed to upload attachment:", e);
+          }
+        }
+      }
       setDrawingData(null);
     },
-    [createComment, grantToken, guest],
+    [createComment, grantToken, guest, getAttachmentUploadUrl, createAttachmentMut],
   );
 
   const handleEditSave = useCallback(
@@ -332,15 +378,18 @@ export default function SharePage() {
     comment: {
       _id: string;
       userName: string;
+      userCompany?: string;
       text: string;
       timestampSeconds: number;
       endTimestampSeconds?: number;
       drawingData?: string;
       _creationTime: number;
       isGuestOwned?: boolean;
+      resolved?: boolean;
       replies: Array<{
         _id: string;
         userName: string;
+        userCompany?: string;
         text: string;
         timestampSeconds: number;
         _creationTime: number;
@@ -348,9 +397,9 @@ export default function SharePage() {
       }>;
     },
   ) => (
-    <article key={comment._id} className="border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3">
+    <article key={comment._id} className={`border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3${comment.resolved ? " opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-bold text-[#1a1a1a]">{comment.userName}</div>
+        <div className="text-sm font-bold text-[#1a1a1a] flex items-center gap-1.5">{comment.userName}{comment.userCompany && <span className="text-xs font-normal italic text-[#888] ml-1">– {comment.userCompany}</span>}{comment.resolved && <span className="text-[10px] font-bold uppercase tracking-wider text-[#888] ml-1">Resolved</span>}</div>
         <div className="flex items-center gap-2">
           {comment.isGuestOwned && editingCommentId !== comment._id && (
             <>
@@ -377,7 +426,7 @@ export default function SharePage() {
           )}
           <button
             type="button"
-            className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+            className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
             onClick={() => playerRef.current?.seekTo(comment.timestampSeconds, { play: true })}
           >
             {formatTimestamp(comment.timestampSeconds)}
@@ -430,7 +479,7 @@ export default function SharePage() {
           {comment.replies.map((reply) => (
             <div key={reply._id} className="text-sm">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
+                <span className="font-bold text-[#1a1a1a]">{reply.userName}{reply.userCompany && <span className="text-xs font-normal italic text-[#888] ml-1">– {reply.userCompany}</span>}</span>
                 <div className="flex items-center gap-2">
                   {reply.isGuestOwned && editingCommentId !== reply._id && (
                     <>
@@ -457,7 +506,7 @@ export default function SharePage() {
                   )}
                   <button
                     type="button"
-                    className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+                    className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
                     onClick={() => playerRef.current?.seekTo(reply.timestampSeconds, { play: true })}
                   >
                     {formatTimestamp(reply.timestampSeconds)}
@@ -521,7 +570,12 @@ export default function SharePage() {
 
       <main className="max-w-6xl mx-auto p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1a1a1a]">{video.title}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-[#1a1a1a]">{video.title}</h1>
+            {video.workflowStatus && (
+              <VideoWorkflowStatusControl status={video.workflowStatus} onChange={() => {}} disabled />
+            )}
+          </div>
           {video.description && (
             <p className="text-[#888] mt-1">{video.description}</p>
           )}
@@ -563,9 +617,15 @@ export default function SharePage() {
                     onColorChange={setDrawingColor}
                     onUndo={() => drawingCanvasRef.current?.undo()}
                     onClear={() => drawingCanvasRef.current?.clear()}
-                    onDone={() => {
-                      const data = drawingCanvasRef.current?.toDataURL() ?? null;
-                      setDrawingData(data);
+                    onDone={async () => {
+                      const drawing = drawingCanvasRef.current?.toDataURL() ?? null;
+                      const frame = playerRef.current?.captureFrame() ?? null;
+                      if (frame && drawing) {
+                        const composited = await compositeDrawingOnFrame(frame, drawing);
+                        setDrawingData(composited);
+                      } else {
+                        setDrawingData(drawing);
+                      }
                       setDrawingMode(false);
                     }}
                   />
@@ -614,7 +674,7 @@ export default function SharePage() {
               <button
                 type="button"
                 onClick={handleCommentAreaClick}
-                className="w-full text-left border-2 border-[#1a1a1a] bg-[#f0f0e8] px-3 py-3 text-sm text-[#888] hover:text-[#1a1a1a] transition-colors"
+                className="w-full text-left px-3 py-3 text-sm border-2 border-dashed border-[#2F6DB4] bg-[#2F6DB4]/5 text-[#2F6DB4] font-bold transition-colors hover:bg-[#2F6DB4]/10"
               >
                 Click to leave feedback...
               </button>
@@ -636,7 +696,7 @@ export default function SharePage() {
       <footer className="border-t-2 border-[#1a1a1a] px-6 py-4 mt-8">
         <div className="max-w-6xl mx-auto text-center text-sm text-[#888]">
           Shared via{" "}
-          <Link to="/" preload="intent" className="text-[#1a1a1a] hover:text-[#2d5a2d] font-bold">
+          <Link to="/" preload="intent" className="text-[#1a1a1a] hover:text-[#2F6DB4] font-bold">
             Snazzy Labs
           </Link>
         </div>

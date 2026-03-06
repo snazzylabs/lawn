@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
 import { AlertCircle, MessageSquare, X, Pencil, Trash2 } from "lucide-react";
+import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
+import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
 import { useWatchData } from "./-watch.data";
 
 export default function WatchPage() {
@@ -56,6 +58,29 @@ export default function WatchPage() {
   // Guest edit state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+
+  // Auto-open onboarding for first-time guests
+  useEffect(() => {
+    if (isGuestReady && isUserLoaded && !userId && !guest) {
+      setShowOnboarding(true);
+    }
+  }, [isGuestReady, isUserLoaded, userId, guest]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        setRangeMarker((prev) => prev ? { ...prev, inTime: currentTime } : { inTime: currentTime, outTime: currentTime + 5 });
+      } else if (e.key === "o" || e.key === "O") {
+        e.preventDefault();
+        setRangeMarker((prev) => prev ? { ...prev, outTime: currentTime } : { inTime: Math.max(0, currentTime - 5), outTime: currentTime });
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentTime]);
 
   useEffect(() => {
     if (!videoData?.video?.muxPlaybackId && !videoData?.video?.hlsKey) {
@@ -122,6 +147,9 @@ export default function WatchPage() {
     [setGuestIdentity],
   );
 
+  const getAttachmentUploadUrl = useAction(api.videoActions.getAttachmentUploadUrl);
+  const createAttachment = useMutation(api.comments.createAttachment);
+
   const handleSubmitComment = useCallback(
     async (args: {
       text: string;
@@ -129,8 +157,9 @@ export default function WatchPage() {
       endTimestampSeconds?: number;
       drawingData?: string;
       parentId?: Id<"comments">;
+      files?: File[];
     }) => {
-      await createComment({
+      const commentId = await createComment({
         publicId,
         text: args.text,
         timestampSeconds: args.timestampSeconds,
@@ -139,10 +168,27 @@ export default function WatchPage() {
         parentId: args.parentId,
         userName: guest?.name,
         guestSessionId: guest?.guestId,
+        userCompany: guest?.company,
       });
+      if (args.files?.length && commentId) {
+        for (const file of args.files) {
+          try {
+            const { url, s3Key } = await getAttachmentUploadUrl({
+              commentId,
+              filename: file.name,
+              fileSize: file.size,
+              contentType: file.type || "application/octet-stream",
+            });
+            await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
+            await createAttachment({ commentId, s3Key, filename: file.name, fileSize: file.size, contentType: file.type || "application/octet-stream" });
+          } catch (e) {
+            console.error("Failed to upload attachment:", e);
+          }
+        }
+      }
       setDrawingData(null);
     },
-    [createComment, publicId, guest],
+    [createComment, publicId, guest, getAttachmentUploadUrl, createAttachment],
   );
 
   const handleEditSave = useCallback(
@@ -215,6 +261,8 @@ export default function WatchPage() {
       drawingData?: string;
       _creationTime: number;
       isGuestOwned?: boolean;
+      userCompany?: string;
+      resolved?: boolean;
       replies: Array<{
         _id: string;
         userName: string;
@@ -232,9 +280,17 @@ export default function WatchPage() {
     };
 
     return (
-      <article key={comment._id} className="border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3">
+      <article key={comment._id} className={`border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3${comment.resolved ? " opacity-50" : ""}`}>
         <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-bold text-[#1a1a1a]">{comment.userName}</div>
+          <div className="text-sm font-bold text-[#1a1a1a] flex items-center gap-1.5">
+            {comment.userName}
+            {comment.userCompany && (
+              <span className="text-xs font-normal italic text-[#888] ml-1">– {comment.userCompany}</span>
+            )}
+            {comment.resolved && (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#888] ml-1">Resolved</span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {comment.isGuestOwned && editingCommentId !== comment._id && (
               <>
@@ -261,7 +317,7 @@ export default function WatchPage() {
             )}
             <button
               type="button"
-              className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+              className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
               onClick={() => seekTo(comment.timestampSeconds)}
             >
               {formatTimestamp(comment.timestampSeconds)}
@@ -341,7 +397,7 @@ export default function WatchPage() {
                     )}
                     <button
                       type="button"
-                      className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+                      className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
                       onClick={() => seekTo(reply.timestampSeconds)}
                     >
                       {formatTimestamp(reply.timestampSeconds)}
@@ -403,7 +459,7 @@ export default function WatchPage() {
         <button
           type="button"
           onClick={handleCommentAreaClick}
-          className="w-full text-left px-4 py-4 text-sm text-[#888] hover:text-[#1a1a1a] transition-colors"
+          className="w-full text-left px-4 py-4 text-sm border-2 border-dashed border-[#2F6DB4] bg-[#2F6DB4]/5 text-[#2F6DB4] font-bold transition-colors hover:bg-[#2F6DB4]/10"
         >
           Click to leave feedback...
         </button>
@@ -425,6 +481,9 @@ export default function WatchPage() {
           </Link>
           <div className="h-4 w-[2px] bg-[#1a1a1a]/20" />
           <h1 className="text-base font-black truncate max-w-[150px] sm:max-w-[300px]">{video.title}</h1>
+          {video.workflowStatus && (
+            <VideoWorkflowStatusControl status={video.workflowStatus} onChange={() => {}} disabled />
+          )}
         </div>
         <div className="flex items-center gap-3 text-xs text-[#888]">
           {guest && !userId && (
@@ -487,9 +546,15 @@ export default function WatchPage() {
                     onColorChange={setDrawingColor}
                     onUndo={() => drawingCanvasRef.current?.undo()}
                     onClear={() => drawingCanvasRef.current?.clear()}
-                    onDone={() => {
-                      const data = drawingCanvasRef.current?.toDataURL() ?? null;
-                      setDrawingData(data);
+                    onDone={async () => {
+                      const drawing = drawingCanvasRef.current?.toDataURL() ?? null;
+                      const frame = playerRef.current?.captureFrame() ?? null;
+                      if (frame && drawing) {
+                        const composited = await compositeDrawingOnFrame(frame, drawing);
+                        setDrawingData(composited);
+                      } else {
+                        setDrawingData(drawing);
+                      }
                       setDrawingMode(false);
                     }}
                   />

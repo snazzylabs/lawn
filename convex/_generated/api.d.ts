@@ -21,6 +21,7 @@ import type * as s3 from "../s3.js";
 import type * as security from "../security.js";
 import type * as shareAccess from "../shareAccess.js";
 import type * as shareLinks from "../shareLinks.js";
+import type * as shortLinks from "../shortLinks.js";
 import type * as teams from "../teams.js";
 import type * as transcodeQueue from "../transcodeQueue.js";
 import type * as users from "../users.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   security: typeof security;
   shareAccess: typeof shareAccess;
   shareLinks: typeof shareLinks;
+  shortLinks: typeof shortLinks;
   teams: typeof teams;
   transcodeQueue: typeof transcodeQueue;
   users: typeof users;

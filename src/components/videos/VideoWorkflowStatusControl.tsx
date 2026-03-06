@@ -29,7 +29,7 @@ function workflowStatusLabel(status: VideoWorkflowStatus) {
 }
 
 function workflowStatusDotColor(status: VideoWorkflowStatus) {
-  if (status === "done") return "bg-[#2d5a2d]";
+  if (status === "done") return "bg-[#2F6DB4]";
   if (status === "rework") return "bg-[#ca8a04]";
   return "bg-[#888]";
 }

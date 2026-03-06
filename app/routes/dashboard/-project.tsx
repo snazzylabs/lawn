@@ -19,6 +19,7 @@ import {
   Download,
   MessageSquare,
   Eye,
+  Share2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -141,6 +142,7 @@ export default function ProjectPage({
   const deleteVideo = useMutation(api.videos.remove);
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
+  const generateProjectPublicId = useMutation(api.projects.generatePublicId);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [shareToast, setShareToast] = useState<ShareToastState | null>(null);
@@ -278,7 +280,7 @@ export default function ProjectPage({
       {/* Header */}
       <DashboardHeader paths={[
         {
-          label: resolvedTeamSlug,
+          label: "Snazzy Labs",
           href: teamHomePath(resolvedTeamSlug),
           prewarmIntentHandlers: prewarmTeamIntentHandlers,
         },
@@ -314,7 +316,26 @@ export default function ProjectPage({
             </button>
           </div>
           {canUpload && (
-            <UploadButton onFilesSelected={handleFilesSelected} />
+            <>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#1a1a1a] text-sm font-bold text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f0f0e8] transition-colors"
+                onClick={async () => {
+                  try {
+                    const pid = await generateProjectPublicId({ projectId: projectId as Id<"projects"> });
+                    const url = `${window.location.origin}/projects/${pid}`;
+                    await navigator.clipboard.writeText(url);
+                    showShareToast("success", "Project share link copied");
+                  } catch {
+                    showShareToast("error", "Could not generate share link");
+                  }
+                }}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                Share Project
+              </button>
+              <UploadButton onFilesSelected={handleFilesSelected} />
+            </>
           )}
         </div>
       </DashboardHeader>

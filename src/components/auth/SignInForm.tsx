@@ -51,7 +51,7 @@ export function SignInForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full bg-transparent border-2 border-[#1a1a1a] text-[#1a1a1a] focus:border-[#2d5a2d] focus:outline-none px-3 py-2 font-mono"
+            className="w-full bg-transparent border-2 border-[#1a1a1a] text-[#1a1a1a] focus:border-[#2F6DB4] focus:outline-none px-3 py-2 font-mono"
           />
         </div>
         <div>
@@ -63,7 +63,7 @@ export function SignInForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full bg-transparent border-2 border-[#1a1a1a] text-[#1a1a1a] focus:border-[#2d5a2d] focus:outline-none px-3 py-2 font-mono"
+            className="w-full bg-transparent border-2 border-[#1a1a1a] text-[#1a1a1a] focus:border-[#2F6DB4] focus:outline-none px-3 py-2 font-mono"
           />
         </div>
 
@@ -74,7 +74,7 @@ export function SignInForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#1a1a1a] hover:bg-[#2d5a2d] text-[#f0f0e8] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)] font-mono font-bold uppercase text-sm py-2.5 px-4 transition-all disabled:opacity-50"
+          className="w-full bg-[#1a1a1a] hover:bg-[#2F6DB4] text-[#f0f0e8] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)] font-mono font-bold uppercase text-sm py-2.5 px-4 transition-all disabled:opacity-50"
         >
           {loading ? "Signing in..." : "Sign In"}
         </button>
@@ -84,7 +84,7 @@ export function SignInForm() {
         Don&apos;t have an account?{" "}
         <Link
           to="/sign-up"
-          className="text-[#2d5a2d] hover:text-[#1a1a1a] font-bold"
+          className="text-[#2F6DB4] hover:text-[#1a1a1a] font-bold"
         >
           Sign up
         </Link>

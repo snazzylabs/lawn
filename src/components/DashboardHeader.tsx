@@ -55,10 +55,10 @@ export function DashboardHeader({
         <Link
           to="/dashboard"
           preload="intent"
-          className="hover:text-[#2d5a2d] transition-colors mr-2 flex-shrink-0"
+          className="hover:text-[#2F6DB4] transition-colors mr-2 flex-shrink-0"
           {...prewarmHomeIntentHandlers}
         >
-          lawn.
+          Snazzy Labs
         </Link>
         {paths.map((path, index) => {
           const isIntermediate = paths.length >= 2 && index < paths.length - 1;
@@ -69,7 +69,7 @@ export function DashboardHeader({
               <Link
                 to={path.href}
                 preload="intent"
-                className="hover:text-[#2d5a2d] transition-colors truncate mr-2"
+                className="hover:text-[#2F6DB4] transition-colors truncate mr-2"
                 {...path.prewarmIntentHandlers}
               >
                 {path.label}

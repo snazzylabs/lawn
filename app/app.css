@@ -1,5 +1,6 @@
 /* Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=block');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 
@@ -78,12 +79,12 @@
   --border: #1a1a1a;
   --border-subtle: #cccccc;
   --shadow-color: #1a1a1a;
-  --shadow-accent: rgba(45,90,45,1);
+  --shadow-accent: rgba(76,167,248,1);
 
-  /* Accent - forest green */
-  --accent: #2d5a2d;
-  --accent-hover: #3a6a3a;
-  --accent-light: #7cb87c;
+  /* Accent - blue */
+  --accent: #4CA7F8;
+  --accent-hover: #3a95e0;
+  --accent-light: #7cb8f0;
 
   /* Semantic colors */
   --destructive: #dc2626;
@@ -116,13 +117,13 @@
   /* Borders */
   --border: #e7ede4;
   --border-subtle: #374038;
-  --shadow-color: #7cb87c;
-  --shadow-accent: #7cb87c;
+  --shadow-color: #7cb8f0;
+  --shadow-accent: #7cb8f0;
 
-  /* Accent - forest green lifted for dark backgrounds */
-  --accent: #7cb87c;
-  --accent-hover: #91c991;
-  --accent-light: #b8ddb8;
+  /* Accent - blue lifted for dark backgrounds */
+  --accent: #7cb8f0;
+  --accent-hover: #9ccbf5;
+  --accent-light: #b8ddf8;
 
   /* Semantic colors */
   --destructive: #f87171;
@@ -154,13 +155,13 @@
     /* Borders */
     --border: #e7ede4;
     --border-subtle: #374038;
-    --shadow-color: #7cb87c;
-    --shadow-accent: #7cb87c;
+    --shadow-color: #7cb8f0;
+    --shadow-accent: #7cb8f0;
 
-    /* Accent - forest green lifted for dark backgrounds */
-    --accent: #7cb87c;
-    --accent-hover: #91c991;
-    --accent-light: #b8ddb8;
+    /* Accent - blue lifted for dark backgrounds */
+    --accent: #7cb8f0;
+    --accent-hover: #9ccbf5;
+    --accent-light: #b8ddf8;
 
     /* Semantic colors */
     --destructive: #f87171;
@@ -362,6 +363,26 @@ body {
   font-family: 'Geist Mono', ui-monospace, monospace;
 }
 
+/* Snazzy Labs landing/auth pages */
+:root {
+  --sl-accent: #4CA7F8;
+  --sl-accent-hover: #3a95e0;
+  --sl-bg: #f8f9fa;
+  --sl-card-bg: rgba(255, 255, 255, 0.7);
+}
+
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: var(--sl-card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 1rem;
+}
+
+.font-inter {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
 /* Map legacy hardcoded utility tokens to theme vars so dark mode works app-wide */
 [class~="bg-[#f0f0e8]"] { background-color: var(--background) !important; }
 [class~="text-[#f0f0e8]"] { color: var(--foreground-inverse) !important; }
@@ -388,14 +409,14 @@ body {
 [class~="text-[#cccccc]"] { color: var(--border-subtle) !important; }
 [class~="border-[#cccccc]"] { border-color: var(--border-subtle) !important; }
 
-[class~="bg-[#2d5a2d]"] { background-color: var(--accent) !important; }
-[class~="text-[#2d5a2d]"] { color: var(--accent) !important; }
-[class~="border-[#2d5a2d]"] { border-color: var(--accent) !important; }
+[class~="bg-[#2F6DB4]"] { background-color: var(--accent) !important; }
+[class~="text-[#2F6DB4]"] { color: var(--accent) !important; }
+[class~="border-[#2F6DB4]"] { border-color: var(--accent) !important; }
 
-[class~="bg-[#3a6a3a]"] { background-color: var(--accent-hover) !important; }
-[class~="text-[#7cb87c]"] { color: var(--accent-light) !important; }
-[class~="bg-[#7cb87c]"] { background-color: var(--accent-light) !important; }
-[class~="border-[#7cb87c]"] { border-color: var(--accent-light) !important; }
+[class~="bg-[#4DA7F8]"] { background-color: var(--accent-hover) !important; }
+[class~="text-[#4DA7F8]"] { color: var(--accent-light) !important; }
+[class~="bg-[#4DA7F8]"] { background-color: var(--accent-light) !important; }
+[class~="border-[#4DA7F8]"] { border-color: var(--accent-light) !important; }
 
 [class~="text-[#dc2626]"] { color: var(--destructive) !important; }
 [class~="bg-[#dc2626]"] { background-color: var(--destructive) !important; }
@@ -414,14 +435,14 @@ body {
 [class~="hover:bg-[#1a1a1a]"]:hover { background-color: var(--foreground) !important; }
 [class~="hover:bg-[#e8e8e0]"]:hover { background-color: var(--surface-alt) !important; }
 [class~="hover:bg-[#d8d8d0]"]:hover { background-color: var(--surface-muted) !important; }
-[class~="hover:bg-[#3a6a3a]"]:hover { background-color: var(--accent-hover) !important; }
+[class~="hover:bg-[#4DA7F8]"]:hover { background-color: var(--accent-hover) !important; }
 [class~="hover:bg-[#dc2626]/10"]:hover {
   background-color: color-mix(in srgb, var(--destructive) 10%, transparent) !important;
 }
 
 [class~="hover:text-[#1a1a1a]"]:hover { color: var(--foreground) !important; }
 [class~="hover:text-[#f0f0e8]"]:hover { color: var(--foreground-inverse) !important; }
-[class~="hover:text-[#2d5a2d]"]:hover { color: var(--accent) !important; }
+[class~="hover:text-[#2F6DB4]"]:hover { color: var(--accent) !important; }
 [class~="group-hover:text-[#1a1a1a]"] {
   transition: color 150ms ease;
 }

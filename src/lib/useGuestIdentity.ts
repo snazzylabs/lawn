@@ -8,17 +8,29 @@ export interface GuestIdentity {
   company?: string;
 }
 
-const COOKIE_NAME = "lawn.guest";
+const COOKIE_NAME = "snazzy.guest";
+const LEGACY_COOKIE_NAME = "lawn.guest";
 const MAX_AGE = 365 * 24 * 60 * 60; // 1 year in seconds
 
 function readCookie(): GuestIdentity | null {
   if (typeof document === "undefined") return null;
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${COOKIE_NAME}=`));
-  if (!match) return null;
+  const cookies = document.cookie.split("; ");
+  const match = cookies.find((row) => row.startsWith(`${COOKIE_NAME}=`));
+  if (match) {
+    try {
+      return JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
+    } catch {
+      return null;
+    }
+  }
+  // Migration: read from legacy cookie
+  const legacy = cookies.find((row) => row.startsWith(`${LEGACY_COOKIE_NAME}=`));
+  if (!legacy) return null;
   try {
-    return JSON.parse(decodeURIComponent(match.split("=").slice(1).join("=")));
+    const identity = JSON.parse(decodeURIComponent(legacy.split("=").slice(1).join("=")));
+    // Migrate to new cookie name
+    if (identity) writeCookie(identity);
+    return identity;
   } catch {
     return null;
   }

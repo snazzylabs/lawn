@@ -6,7 +6,7 @@ export const Route = createFileRoute("/dashboard")({
   head: () =>
     seoHead({
       title: "Dashboard",
-      description: "Manage your video projects on lawn.",
+      description: "Manage your video projects on Snazzy Labs.",
       path: "/dashboard",
       noIndex: true,
     }),

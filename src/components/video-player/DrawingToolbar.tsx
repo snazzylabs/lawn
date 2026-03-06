@@ -89,7 +89,7 @@ export function DrawingToolbar({
       <button
         type="button"
         onClick={onDone}
-        className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-[#2d5a2d] px-3 text-xs font-medium transition hover:bg-[#3a6a3a]"
+        className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-[#2F6DB4] px-3 text-xs font-medium transition hover:bg-[#4DA7F8]"
         title="Done drawing"
       >
         <Check className="h-3.5 w-3.5" />

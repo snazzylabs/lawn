@@ -9,9 +9,9 @@ Brutalist, typographic, minimal. The design should feel bold and direct—like a
 - **Background**: `#f0f0e8` (warm cream)
 - **Text**: `#1a1a1a` (near-black)
 - **Muted text**: `#888888`
-- **Primary accent**: `#2d5a2d` (deep forest green)
-- **Accent hover**: `#3a6a3a`
-- **Highlight**: `#7cb87c` (soft green for emphasis)
+- **Primary accent**: `#2F6DB4` (blue)
+- **Accent hover**: `#4DA7F8`
+- **Highlight**: `#4DA7F8` (soft blue for emphasis)
 - **Borders**: `#1a1a1a` (strong) or `#ccc` (subtle)
 - **Inverted sections**: `#1a1a1a` background with `#f0f0e8` text
 

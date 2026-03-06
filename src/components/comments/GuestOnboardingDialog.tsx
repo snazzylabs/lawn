@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Scissors, Pencil } from "lucide-react";
+import { MessageSquare, Scissors, Pencil, Paperclip } from "lucide-react";
 
 interface GuestOnboardingDialogProps {
   open: boolean;
@@ -32,6 +32,11 @@ const STEPS = [
     icon: Pencil,
     title: "Draw on Frame",
     description: "Annotate directly on the video",
+  },
+  {
+    icon: Paperclip,
+    title: "Attach Files",
+    description: "Upload PDFs, images, or videos with your notes",
   },
 ] as const;
 
@@ -78,11 +83,11 @@ export function GuestOnboardingDialog({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {STEPS.map((step) => (
               <div key={step.title} className="text-center space-y-2">
                 <div className="mx-auto w-10 h-10 border-2 border-[#1a1a1a] flex items-center justify-center">
-                  <step.icon className="h-5 w-5 text-[#2d5a2d]" />
+                  <step.icon className="h-5 w-5 text-[#2F6DB4]" />
                 </div>
                 <div className="text-xs font-bold uppercase tracking-tight text-[#1a1a1a]">
                   {step.title}
@@ -97,7 +102,7 @@ export function GuestOnboardingDialog({
           <Button
             type="submit"
             disabled={!name.trim()}
-            className="w-full bg-[#2d5a2d] hover:bg-[#3a6a3a] text-[#f0f0e8] font-bold"
+            className="w-full bg-[#2F6DB4] hover:bg-[#4DA7F8] text-[#f0f0e8] font-bold"
           >
             Start Reviewing
           </Button>

@@ -17,6 +17,8 @@ import {
   type VideoWorkflowStatus,
 } from "@/components/videos/VideoWorkflowStatusControl";
 import { formatDuration } from "@/lib/utils";
+import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
+import { downloadFCPXML, downloadPremiereCSV, downloadDaVinciEDL } from "@/lib/nleExport";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
@@ -27,6 +29,7 @@ import {
   Link as LinkIcon,
   MessageSquare,
   MoreVertical,
+  Download,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -296,7 +299,7 @@ export default function VideoPage() {
       {/* Header */}
       <DashboardHeader paths={[
         {
-          label: resolvedTeamSlug,
+          label: "Snazzy Labs",
           href: teamHomePath(resolvedTeamSlug),
           prewarmIntentHandlers: prewarmTeamIntentHandlers,
         },
@@ -417,6 +420,22 @@ export default function VideoPage() {
               <MessageSquare className="mr-2 h-4 w-4" />
               Comments{comments && comments.length > 0 ? ` (${comments.length})` : ""}
             </DropdownMenuItem>
+            {comments && comments.length > 0 && (
+              <>
+                <DropdownMenuItem onSelect={() => downloadFCPXML(comments, video?.title ?? "video")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export FCPXML
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => downloadPremiereCSV(comments, video?.title ?? "video")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Premiere CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => downloadDaVinciEDL(comments, video?.title ?? "video")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export DaVinci EDL
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -428,7 +447,7 @@ export default function VideoPage() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black">
           {video.status === "processing" && isUsingOriginalFallback && activePlaybackUrl ? (
             <div className="flex-shrink-0 flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 text-sm text-white">
-              <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-[#2d5a2d]" />
+              <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-[#2F6DB4]" />
               <span className="font-semibold">Original playback active.</span>
               <span className="text-white/60">Transcoded stream is still encoding.</span>
             </div>
@@ -501,9 +520,15 @@ export default function VideoPage() {
                     onColorChange={setDrawingColor}
                     onUndo={() => drawingCanvasRef.current?.undo()}
                     onClear={() => drawingCanvasRef.current?.clear()}
-                    onDone={() => {
-                      const data = drawingCanvasRef.current?.toDataURL() ?? null;
-                      setDrawingData(data);
+                    onDone={async () => {
+                      const drawing = drawingCanvasRef.current?.toDataURL() ?? null;
+                      const frame = playerRef.current?.captureFrame() ?? null;
+                      if (frame && drawing) {
+                        const composited = await compositeDrawingOnFrame(frame, drawing);
+                        setDrawingData(composited);
+                      } else {
+                        setDrawingData(drawing);
+                      }
                       setDrawingMode(false);
                     }}
                   />

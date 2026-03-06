@@ -173,10 +173,11 @@ function useTranscoder(): boolean {
 
 function buildPublicPlaybackSession(
   playbackId: string,
-): { url: string; posterUrl: string } {
+): { url: string; posterUrl: string; spriteVttUrl: string } {
   return {
     url: buildMuxPlaybackUrl(playbackId),
     posterUrl: buildMuxThumbnailUrl(playbackId),
+    spriteVttUrl: `https://image.mux.com/${playbackId}/storyboard.vtt`,
   };
 }
 
@@ -768,5 +769,75 @@ export const purgeVideoFiles = internalAction({
     const prefix = `videos/${args.videoId}/`;
     await deleteAllObjectsWithPrefix(prefix);
     return null;
+  },
+});
+
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  "application/pdf",
+  "text/plain",
+  "text/rtf",
+  "text/markdown",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-matroska",
+]);
+
+const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024; // 100 MB
+
+export const getAttachmentUploadUrl = action({
+  args: {
+    commentId: v.id("comments"),
+    filename: v.string(),
+    fileSize: v.number(),
+    contentType: v.string(),
+  },
+  returns: v.object({
+    url: v.string(),
+    s3Key: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    if (!ALLOWED_ATTACHMENT_TYPES.has(args.contentType)) {
+      throw new Error("File type not allowed");
+    }
+    if (args.fileSize > MAX_ATTACHMENT_SIZE) {
+      throw new Error("File too large (max 100 MB)");
+    }
+
+    const comment = await ctx.runQuery(api.comments.getById, { commentId: args.commentId });
+    if (!comment) {
+      throw new Error("Comment not found");
+    }
+
+    const s3 = getS3SigningClient();
+    const ext = getExtensionFromKey(args.filename, "bin");
+    const key = `attachments/${args.commentId}/${Date.now()}.${ext}`;
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      ContentType: args.contentType,
+    });
+    const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+
+    return { url, s3Key: key };
+  },
+});
+
+export const getAttachmentDownloadUrl = action({
+  args: {
+    s3Key: v.string(),
+  },
+  returns: v.string(),
+  handler: async (_ctx, args) => {
+    const s3 = getS3SigningClient();
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: args.s3Key,
+    });
+    return await getSignedUrl(s3, command, { expiresIn: 3600 });
   },
 });

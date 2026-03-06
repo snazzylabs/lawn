@@ -6,7 +6,7 @@ export const Route = createFileRoute("/watch/$publicId")({
   head: () =>
     seoHead({
       title: "Watch video",
-      description: "Watch and review this video on lawn.",
+      description: "Watch and review this video on Snazzy Labs.",
       path: "/watch",
       noIndex: true,
     }),

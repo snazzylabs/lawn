@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import {
@@ -45,6 +45,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
   const createShareLink = useMutation(api.shareLinks.create);
   const deleteShareLink = useMutation(api.shareLinks.remove);
   const setVisibility = useMutation(api.videos.setVisibility);
+  const createShortLink = useAction(api.shortLinks.createShortLink);
 
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
@@ -57,7 +58,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
   const handleCreateLink = async () => {
     setIsCreating(true);
     try {
-      await createShareLink({
+      const result = await createShareLink({
         videoId,
         expiresInDays: newLinkOptions.expiresInDays,
         allowDownload: false,
@@ -67,6 +68,11 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         expiresInDays: undefined,
         password: undefined,
       });
+      // Fire-and-forget short link creation
+      const longUrl = `${window.location.origin}/share/${result.token}`;
+      void createShortLink({ shareLinkId: result.linkId, longUrl }).catch((e) =>
+        console.error("Short link creation failed:", e),
+      );
     } catch (error) {
       console.error("Failed to create share link:", error);
     } finally {
@@ -86,8 +92,8 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     }
   };
 
-  const handleCopyLink = (token: string) => {
-    const url = `${window.location.origin}/share/${token}`;
+  const handleCopyLink = (token: string, shortUrl?: string) => {
+    const url = shortUrl || `${window.location.origin}/share/${token}`;
     navigator.clipboard.writeText(url);
     setCopiedId(token);
     setTimeout(() => setCopiedId(null), 2000);
@@ -270,7 +276,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <code className="text-sm bg-[#e8e8e0] px-2 py-0.5 font-mono truncate max-w-[200px]">
-                        /share/{link.token}
+                        {link.shortUrl || `/share/${link.token}`}
                       </code>
                       {link.isExpired ? (
                         <Badge variant="destructive">Expired</Badge>
@@ -298,10 +304,10 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleCopyLink(link.token)}
+                      onClick={() => handleCopyLink(link.token, link.shortUrl)}
                     >
                       {copiedId === link.token ? (
-                        <Check className="h-4 w-4 text-[#2d5a2d]" />
+                        <Check className="h-4 w-4 text-[#2F6DB4]" />
                       ) : (
                         <Copy className="h-4 w-4" />
                       )}

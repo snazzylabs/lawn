@@ -27,6 +27,7 @@ interface Comment {
   parentId?: Id<"comments">;
   resolved: boolean;
   userName: string;
+  userCompany?: string;
   userAvatarUrl?: string;
   _creationTime: number;
   userClerkId?: string;
@@ -158,7 +159,7 @@ export function CommentItem({
         "transition-all relative group",
         isReply ? "py-2" : "p-4",
         isHighlighted
-          ? "bg-[#2d5a2d]/10"
+          ? "bg-[#2F6DB4]/10"
           : "hover:bg-[#1a1a1a]/5",
         comment.resolved && "opacity-50"
       )}
@@ -175,16 +176,17 @@ export function CommentItem({
             <div className="flex items-center gap-2 min-w-0">
               <span className="font-bold text-sm text-[#1a1a1a] truncate">
                 {comment.userName}
+                {comment.userCompany && <span className="text-xs font-normal italic text-[#888] ml-1">– {comment.userCompany}</span>}
               </span>
               <button
                 onClick={() => onTimestampClick(comment.timestampSeconds)}
-                className="text-xs text-[#2d5a2d] hover:text-[#1a1a1a] font-mono font-bold shrink-0"
+                className="text-xs text-[#2F6DB4] hover:text-[#1a1a1a] font-mono font-bold shrink-0"
               >
                 {formatTimestamp(comment.timestampSeconds)}
                 {comment.endTimestampSeconds !== undefined && `–${formatTimestamp(comment.endTimestampSeconds)}`}
               </button>
               {comment.drawingData && (
-                <span className="inline-flex items-center gap-0.5 text-[10px] text-[#2d5a2d]" title="Has annotation">
+                <span className="inline-flex items-center gap-0.5 text-[10px] text-[#2F6DB4]" title="Has annotation">
                   <Pencil className="h-3 w-3" />
                 </span>
               )}
@@ -275,7 +277,7 @@ export function CommentItem({
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={handleCancelEdit}>
                     Cancel
                   </Button>
-                  <Button size="sm" className="h-6 px-2 text-xs bg-[#2d5a2d] text-white hover:bg-[#3a6a3a]" onClick={() => void handleSaveEdit()}>
+                  <Button size="sm" className="h-6 px-2 text-xs bg-[#2F6DB4] text-white hover:bg-[#4DA7F8]" onClick={() => void handleSaveEdit()}>
                     Save
                   </Button>
                 </div>

@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { getUser, requireTeamAccess, requireProjectAccess } from "./auth";
 import { assertTeamHasActiveSubscription } from "./billingHelpers";
 import { purgeAndDeleteVideo } from "./videos";
+import { nanoid } from "nanoid";
 
 export const create = mutation({
   args: {
@@ -138,5 +139,72 @@ export const remove = mutation({
     }
 
     await ctx.db.delete(args.projectId);
+  },
+});
+
+export const generatePublicId = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    await requireProjectAccess(ctx, args.projectId, "admin");
+
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new Error("Project not found");
+
+    if (project.publicId) return project.publicId;
+
+    const publicId = nanoid(12);
+    await ctx.db.patch(args.projectId, { publicId, visibility: "public" });
+    return publicId;
+  },
+});
+
+export const getByPublicId = query({
+  args: { publicId: v.string() },
+  handler: async (ctx, args) => {
+    const project = await ctx.db
+      .query("projects")
+      .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
+      .unique();
+
+    if (!project || project.visibility !== "public") {
+      return null;
+    }
+
+    const videos = await ctx.db
+      .query("videos")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+
+    const readyPublicVideos = videos.filter(
+      (v) => v.status === "ready" && v.visibility === "public",
+    );
+
+    const videosWithCommentCounts = await Promise.all(
+      readyPublicVideos.map(async (video) => {
+        const comments = await ctx.db
+          .query("comments")
+          .withIndex("by_video", (q) => q.eq("videoId", video._id))
+          .collect();
+        return {
+          _id: video._id,
+          publicId: video.publicId,
+          title: video.title,
+          description: video.description,
+          duration: video.duration,
+          thumbnailUrl: video.thumbnailUrl,
+          workflowStatus: video.workflowStatus,
+          commentCount: comments.filter((c) => !c.parentId).length,
+        };
+      }),
+    );
+
+    return {
+      project: {
+        _id: project._id,
+        name: project.name,
+        description: project.description,
+      },
+      videos: videosWithCommentCounts,
+    };
   },
 });

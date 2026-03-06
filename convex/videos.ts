@@ -150,6 +150,7 @@ export const getByPublicId = query({
         spriteVttKey: video.spriteVttKey,
         contentType: video.contentType,
         s3Key: video.s3Key,
+        workflowStatus: video.workflowStatus,
       },
     };
   },
@@ -200,6 +201,7 @@ export const getByShareGrant = query({
         spriteVttKey: video.spriteVttKey,
         contentType: video.contentType,
         s3Key: video.s3Key,
+        workflowStatus: video.workflowStatus,
       },
       grantExpiresAt: resolved.grant.expiresAt,
     };

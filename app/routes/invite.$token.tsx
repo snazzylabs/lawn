@@ -6,7 +6,7 @@ export const Route = createFileRoute("/invite/$token")({
   head: () =>
     seoHead({
       title: "Join team",
-      description: "Accept your team invitation on lawn.",
+      description: "Accept your team invitation on Snazzy Labs.",
       path: "/invite",
       noIndex: true,
     }),

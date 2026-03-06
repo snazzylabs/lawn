@@ -37,6 +37,7 @@ function toPublicCommentPayload(
     userName: string;
     userAvatarUrl?: string;
     guestSessionId?: string;
+    userCompany?: string;
   },
   guestSessionId?: string,
 ) {
@@ -51,6 +52,7 @@ function toPublicCommentPayload(
     resolved: comment.resolved,
     userName: comment.userName,
     userAvatarUrl: comment.userAvatarUrl,
+    userCompany: comment.userCompany,
     isGuestOwned: Boolean(
       guestSessionId &&
         comment.guestSessionId &&
@@ -74,6 +76,13 @@ async function getPublicVideoByPublicId(
 
   return video;
 }
+
+export const getById = query({
+  args: { commentId: v.id("comments") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.commentId);
+  },
+});
 
 export const list = query({
   args: { videoId: v.id("videos") },
@@ -119,6 +128,7 @@ export const create = mutation({
       drawingData: args.drawingData,
       parentId: args.parentId,
       resolved: false,
+      userCompany: "Snazzy Labs",
     });
   },
 });
@@ -133,6 +143,7 @@ export const createForPublic = mutation({
     parentId: v.optional(v.id("comments")),
     userName: v.optional(v.string()),
     guestSessionId: v.optional(v.string()),
+    userCompany: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getUser(ctx);
@@ -161,6 +172,7 @@ export const createForPublic = mutation({
       parentId: args.parentId,
       resolved: false,
       guestSessionId: user ? undefined : args.guestSessionId,
+      userCompany: user ? "Snazzy Labs" : args.userCompany,
     });
   },
 });
@@ -175,6 +187,7 @@ export const createForShareGrant = mutation({
     parentId: v.optional(v.id("comments")),
     userName: v.optional(v.string()),
     guestSessionId: v.optional(v.string()),
+    userCompany: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await getUser(ctx);
@@ -208,6 +221,7 @@ export const createForShareGrant = mutation({
       parentId: args.parentId,
       resolved: false,
       guestSessionId: user ? undefined : args.guestSessionId,
+      userCompany: user ? "Snazzy Labs" : args.userCompany,
     });
   },
 });
@@ -394,5 +408,37 @@ export const getThreadedForShareGrant = query({
     return toThreadedComments(
       comments.map((c) => toPublicCommentPayload(c, args.guestSessionId)),
     );
+  },
+});
+
+export const createAttachment = mutation({
+  args: {
+    commentId: v.id("comments"),
+    s3Key: v.string(),
+    filename: v.string(),
+    fileSize: v.number(),
+    contentType: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) throw new Error("Comment not found");
+
+    return await ctx.db.insert("commentAttachments", {
+      commentId: args.commentId,
+      s3Key: args.s3Key,
+      filename: args.filename,
+      fileSize: args.fileSize,
+      contentType: args.contentType,
+    });
+  },
+});
+
+export const getAttachmentsByComment = query({
+  args: { commentId: v.id("comments") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("commentAttachments")
+      .withIndex("by_comment", (q) => q.eq("commentId", args.commentId))
+      .collect();
   },
 });

@@ -18,7 +18,7 @@ export function NotFound() {
 
         <Link
           to="/"
-          className="inline-flex items-center justify-center bg-[#1a1a1a] text-[#f0f0e8] font-bold text-lg px-10 py-5 uppercase tracking-wide hover:bg-[#2d5a2d] transition-colors"
+          className="inline-flex items-center justify-center bg-[#1a1a1a] text-[#f0f0e8] font-bold text-lg px-10 py-5 uppercase tracking-wide hover:bg-[#2F6DB4] transition-colors"
         >
           Return to Base
         </Link>

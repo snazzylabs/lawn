@@ -63,7 +63,11 @@ export default defineSchema({
     teamId: v.id("teams"),
     name: v.string(),
     description: v.optional(v.string()),
-  }).index("by_team", ["teamId"]),
+    publicId: v.optional(v.string()),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("private"))),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_public_id", ["publicId"]),
 
   videos: defineTable({
     projectId: v.id("projects"),
@@ -125,6 +129,7 @@ export default defineSchema({
     parentId: v.optional(v.id("comments")),
     resolved: v.boolean(),
     guestSessionId: v.optional(v.string()),
+    userCompany: v.optional(v.string()),
   })
     .index("by_video", ["videoId"])
     .index("by_video_and_timestamp", ["videoId", "timestampSeconds"])
@@ -142,6 +147,8 @@ export default defineSchema({
     failedAccessAttempts: v.optional(v.number()),
     lockedUntil: v.optional(v.number()),
     viewCount: v.number(),
+    shortUrl: v.optional(v.string()),
+    shortLinkId: v.optional(v.number()),
   })
     .index("by_token", ["token"])
     .index("by_video", ["videoId"]),
@@ -196,4 +203,12 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_video", ["videoId"])
     .index("by_status_created", ["status", "createdAt"]),
+
+  commentAttachments: defineTable({
+    commentId: v.id("comments"),
+    s3Key: v.string(),
+    filename: v.string(),
+    fileSize: v.number(),
+    contentType: v.string(),
+  }).index("by_comment", ["commentId"]),
 });

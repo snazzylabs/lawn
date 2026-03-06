@@ -2,7 +2,7 @@ import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query, MutationCtx } from "./_generated/server";
 import { identityName, requireVideoAccess } from "./auth";
 import { generateUniqueToken, hashPassword, verifyPassword } from "./security";
 import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
@@ -100,7 +100,7 @@ export const create = mutation({
       ? await hashPassword(normalizedPassword)
       : undefined;
 
-    await ctx.db.insert("shareLinks", {
+    const linkId = await ctx.db.insert("shareLinks", {
       videoId: args.videoId,
       token,
       createdByClerkId: user.subject,
@@ -114,7 +114,7 @@ export const create = mutation({
       viewCount: 0,
     });
 
-    return { token };
+    return { token, linkId };
   },
 });
 
@@ -141,6 +141,7 @@ export const list = query({
       hasPassword: hasPasswordProtection(link),
       creatorName: link.createdByName,
       isExpired: link.expiresAt ? link.expiresAt < Date.now() : false,
+      shortUrl: link.shortUrl,
     }));
 
     return linksWithCreator;
@@ -328,5 +329,19 @@ export const issueAccessGrant = mutation({
       ok: true,
       grantToken,
     };
+  },
+});
+
+export const setShortUrl = internalMutation({
+  args: {
+    shareLinkId: v.id("shareLinks"),
+    shortUrl: v.string(),
+    shortLinkId: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.shareLinkId, {
+      shortUrl: args.shortUrl,
+      shortLinkId: args.shortLinkId,
+    });
   },
 });

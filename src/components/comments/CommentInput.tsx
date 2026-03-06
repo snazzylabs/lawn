@@ -6,7 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { formatTimestamp, formatTimestampInput, parseTimestampInput } from "@/lib/utils";
-import { Send, X, Scissors, Pencil } from "lucide-react";
+import { Send, X, Scissors, Pencil, Paperclip } from "lucide-react";
 
 interface CommentInputProps {
   videoId?: Id<"videos">;
@@ -28,6 +28,7 @@ interface CommentInputProps {
     endTimestampSeconds?: number;
     drawingData?: string;
     parentId?: Id<"comments">;
+    files?: File[];
   }) => Promise<void>;
 }
 
@@ -52,7 +53,9 @@ export function CommentInput({
   const [rangeMode, setRangeMode] = useState(false);
   const [inTime, setInTime] = useState("");
   const [outTime, setOutTime] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const createComment = useMutation(api.comments.create);
 
   useEffect(() => {
@@ -121,6 +124,7 @@ export function CommentInput({
         ...(parsedOut !== null ? { endTimestampSeconds: parsedOut } : {}),
         ...(drawingData ? { drawingData } : {}),
         parentId,
+        ...(pendingFiles.length > 0 ? { files: pendingFiles } : {}),
       };
       if (onSubmitComment) {
         await onSubmitComment(payload);
@@ -131,6 +135,7 @@ export function CommentInput({
       setRangeMode(false);
       setInTime("");
       setOutTime("");
+      setPendingFiles([]);
       onRangeChange?.(null);
       onSubmit?.();
     } catch (error) {
@@ -209,6 +214,32 @@ export function CommentInput({
         </div>
       )}
 
+      {pendingFiles.length > 0 && (
+        <div className={variant === "seamless" ? "flex flex-wrap gap-1 px-4 pb-1" : "flex flex-wrap gap-1 px-3 pb-1"}>
+          {pendingFiles.map((file, idx) => (
+            <span key={idx} className="inline-flex items-center gap-1 text-[11px] bg-[#1a1a1a]/5 border border-[#ccc] px-1.5 py-0.5 text-[#1a1a1a]">
+              <Paperclip className="h-3 w-3 text-[#888]" />
+              {file.name}
+              <button type="button" onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))} className="text-[#888] hover:text-[#dc2626]">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple
+        accept=".pdf,.txt,.rtf,.md,.mp4,.mov,.webm,.mkv,.png,.jpg,.jpeg,.gif,.webp"
+        onChange={(e) => {
+          if (e.target.files) {
+            setPendingFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+          }
+          e.target.value = "";
+        }}
+      />
       <div
         className={
           variant === "seamless"
@@ -222,7 +253,7 @@ export function CommentInput({
               type="button"
               variant="ghost"
               size="icon"
-              className={`h-8 w-8 shrink-0 ${rangeMode ? "bg-[#2d5a2d]/10 text-[#2d5a2d]" : ""}`}
+              className={`h-8 w-8 shrink-0 ${rangeMode ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
               onClick={toggleRangeMode}
               title={rangeMode ? "Disable range mode" : "Mark in/out range"}
             >
@@ -233,13 +264,23 @@ export function CommentInput({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={`h-8 w-8 shrink-0 ${drawingData ? "bg-[#2d5a2d]/10 text-[#2d5a2d]" : ""}`}
+                className={`h-8 w-8 shrink-0 ${drawingData ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
                 onClick={onDrawingRequest}
                 title="Draw annotation"
               >
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 shrink-0 ${pendingFiles.length > 0 ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach files"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
           </>
         )}
         {onCancel && (

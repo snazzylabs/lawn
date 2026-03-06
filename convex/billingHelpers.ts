@@ -132,55 +132,29 @@ export async function assertTeamHasActiveSubscription(
   ctx: BillingCtx,
   teamId: Id<"teams">,
 ) {
-  if (isSelfHosted()) {
-    const team = await ctx.db.get(teamId);
-    if (!team) throw new Error("Team not found");
-    return {
-      team,
-      subscription: null,
-      plan: "pro" as TeamPlan,
-      hasActiveSubscription: true,
-    };
-  }
-  const state = await getTeamSubscriptionState(ctx, teamId);
-  if (!state.hasActiveSubscription) {
-    throw new Error("An active Basic or Pro subscription is required.");
-  }
-  return state;
+  const team = await ctx.db.get(teamId);
+  if (!team) throw new Error("Team not found");
+  return {
+    team,
+    subscription: null,
+    plan: "pro" as TeamPlan,
+    hasActiveSubscription: true,
+  };
 }
 
 export async function assertTeamCanStoreBytes(
   ctx: BillingCtx,
   teamId: Id<"teams">,
-  incomingBytes: number,
+  _incomingBytes: number,
 ) {
-  if (isSelfHosted()) {
-    const team = await ctx.db.get(teamId);
-    if (!team) throw new Error("Team not found");
-    return {
-      team,
-      subscription: null,
-      plan: "pro" as TeamPlan,
-      hasActiveSubscription: true,
-      storageUsedBytes: 0,
-      storageLimitBytes: Infinity,
-    };
-  }
-
-  const state = await assertTeamHasActiveSubscription(ctx, teamId);
-  const storageUsedBytes = await getTeamStorageUsedBytes(ctx, teamId);
-  const storageLimitBytes = TEAM_PLAN_STORAGE_LIMIT_BYTES[state.plan];
-  const requestedBytes = Number.isFinite(incomingBytes) ? Math.max(0, incomingBytes) : 0;
-
-  if (storageUsedBytes + requestedBytes > storageLimitBytes) {
-    throw new Error(
-      `Storage limit reached for the ${state.plan} plan. Upgrade to continue uploading.`,
-    );
-  }
-
+  const team = await ctx.db.get(teamId);
+  if (!team) throw new Error("Team not found");
   return {
-    ...state,
-    storageUsedBytes,
-    storageLimitBytes,
+    team,
+    subscription: null,
+    plan: "pro" as TeamPlan,
+    hasActiveSubscription: true,
+    storageUsedBytes: 0,
+    storageLimitBytes: Infinity,
   };
 }

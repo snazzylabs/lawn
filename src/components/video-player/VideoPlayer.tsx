@@ -78,6 +78,7 @@ interface VideoPlayerProps {
 
 export interface VideoPlayerHandle {
   seekTo: (time: number, options?: { play?: boolean }) => void;
+  captureFrame: () => string | null;
 }
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
@@ -230,7 +231,19 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     [applyTime, showControls]
   );
 
-  useImperativeHandle(ref, () => ({ seekTo }), [seekTo]);
+  const captureFrame = useCallback((): string | null => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0);
+    return canvas.toDataURL("image/png");
+  }, []);
+
+  useImperativeHandle(ref, () => ({ seekTo, captureFrame }), [seekTo, captureFrame]);
 
   const handleSeekBy = useCallback(
     (delta: number) => {
@@ -975,14 +988,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         {rangeMarker && duration > 0 && (
           <>
             <div
-              className="absolute inset-y-0 z-[8] bg-[#2d5a2d]/30 rounded-full"
+              className="absolute inset-y-0 z-[8] bg-[#2F6DB4]/30 rounded-full"
               style={{
                 left: `${(rangeMarker.inTime / duration) * 100}%`,
                 width: `${((rangeMarker.outTime - rangeMarker.inTime) / duration) * 100}%`,
               }}
             />
             <div
-              className="absolute top-1/2 z-[15] h-5 w-2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-[#2d5a2d] bg-[#7cb87c] shadow"
+              className="absolute top-1/2 z-[15] h-5 w-2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-[#2F6DB4] bg-[#4DA7F8] shadow"
               style={{ left: `${(rangeMarker.inTime / duration) * 100}%` }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -1010,7 +1023,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               }}
             />
             <div
-              className="absolute top-1/2 z-[15] h-5 w-2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-[#2d5a2d] bg-[#7cb87c] shadow"
+              className="absolute top-1/2 z-[15] h-5 w-2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-[#2F6DB4] bg-[#4DA7F8] shadow"
               style={{ left: `${(rangeMarker.outTime / duration) * 100}%` }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -1043,7 +1056,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         {/* Editing marker (draggable diamond) */}
         {editingMarker && duration > 0 && (
           <div
-            className="absolute top-1/2 z-[15] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ew-resize border-2 border-[#2d5a2d] bg-[#7cb87c] shadow"
+            className="absolute top-1/2 z-[15] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rotate-45 cursor-ew-resize border-2 border-[#2F6DB4] bg-[#4DA7F8] shadow"
             style={{ left: `${(editingMarker.timestampSeconds / duration) * 100}%` }}
             onPointerDown={(e) => {
               e.stopPropagation();
