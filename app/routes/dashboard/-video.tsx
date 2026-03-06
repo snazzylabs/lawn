@@ -299,11 +299,6 @@ export default function VideoPage() {
       {/* Header */}
       <DashboardHeader paths={[
         {
-          label: "Snazzy Labs",
-          href: teamHomePath(resolvedTeamSlug),
-          prewarmIntentHandlers: prewarmTeamIntentHandlers,
-        },
-        {
           label: context?.project?.name ?? "project",
           href: projectPath(resolvedTeamSlug, resolvedProjectId),
           prewarmIntentHandlers: prewarmProjectIntentHandlers,
@@ -358,7 +353,7 @@ export default function VideoPage() {
             </div>
           )
         }
-      ]}>
+      ]} teamId={context?.team._id} teamSlug={resolvedTeamSlug}>
         {/* Desktop: inline actions */}
         <div className="hidden sm:flex items-center gap-3 text-xs text-[#888]">
           <span className="truncate max-w-[100px]">{video.uploaderName}</span>
@@ -566,7 +561,7 @@ export default function VideoPage() {
         </div>
 
         {/* Comments sidebar — desktop */}
-        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8]">
+        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
           <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 dark:border-white/10 flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a] dark:text-[#f0f0e8]">
               Discussion
@@ -589,6 +584,8 @@ export default function VideoPage() {
               highlightedCommentId={highlightedCommentId}
               canResolve={canEdit}
               onVisibleIdsChange={setVisibleCommentIds}
+              currentUserIdentifier={context?.userSubject}
+              currentUserName={video?.uploaderName}
             />
           </div>
           {canComment && (
@@ -644,6 +641,8 @@ export default function VideoPage() {
               highlightedCommentId={highlightedCommentId}
               canResolve={canEdit}
               onVisibleIdsChange={setVisibleCommentIds}
+              currentUserIdentifier={context?.userSubject}
+              currentUserName={video?.uploaderName}
             />
           </div>
           {canComment && (

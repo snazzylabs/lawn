@@ -1,13 +1,22 @@
 import { Link } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
-import { Moon, Sun } from "lucide-react";
+import { Bell, Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeToggle";
 import React from "react";
-import { useConvex } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prewarmDashboardIndex } from "../../app/routes/dashboard/-index.data";
 import { isSelfHosted } from "@/lib/selfHosted";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { videoPath } from "@/lib/routes";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function ThemeToggleButton() {
   const { theme, toggleTheme, mounted } = useTheme();
@@ -30,6 +39,75 @@ function ThemeToggleButton() {
   );
 }
 
+function NotificationBell({ teamId, teamSlug }: { teamId: Id<"teams">; teamSlug: string }) {
+  const notifications = useQuery(api.notifications.getUnread, { teamId });
+  const markRead = useMutation(api.notifications.markRead);
+  const markAllRead = useMutation(api.notifications.markAllRead);
+  const count = notifications?.length ?? 0;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="relative w-8 h-8 flex items-center justify-center text-[#888] hover:text-[#1a1a1a] hover:bg-[#e8e8e0] transition-colors"
+          aria-label="Notifications"
+        >
+          <Bell className="h-4 w-4" />
+          {count > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center bg-[#2F6DB4] text-white text-[10px] font-bold px-1">
+              {count > 9 ? "9+" : count}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
+        {count === 0 ? (
+          <div className="px-3 py-4 text-center text-sm text-[#888]">
+            No new notifications
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between px-3 py-2 border-b border-[#ccc]">
+              <span className="text-xs font-bold text-[#888] uppercase tracking-wide">Notifications</span>
+              <button
+                onClick={() => markAllRead({ teamId })}
+                className="text-xs text-[#2F6DB4] hover:underline"
+              >
+                Mark all read
+              </button>
+            </div>
+            {notifications?.map((n) => (
+              <DropdownMenuItem key={n._id} asChild>
+                <Link
+                  to={videoPath(teamSlug, n.projectId, n.videoId)}
+                  onClick={() => markRead({ notificationId: n._id })}
+                  className="flex flex-col items-start gap-1 px-3 py-2.5 cursor-pointer"
+                >
+                  <span className="text-sm leading-snug">{n.message}</span>
+                  <span className="text-xs text-[#888] font-mono">
+                    {formatTimeAgo(n.createdAt)}
+                  </span>
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export type PathSegment = {
   label: React.ReactNode;
   href?: string;
@@ -39,9 +117,13 @@ export type PathSegment = {
 export function DashboardHeader({
   children,
   paths = [],
+  teamId,
+  teamSlug,
 }: {
   children?: React.ReactNode;
   paths?: PathSegment[];
+  teamId?: Id<"teams">;
+  teamSlug?: string;
 }) {
   const convex = useConvex();
   const prewarmHomeIntentHandlers = useRoutePrewarmIntent(() =>
@@ -86,6 +168,7 @@ export function DashboardHeader({
 
       {/* User controls — pinned top-right */}
       <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-4 pl-4 border-l-2 border-[#1a1a1a]/10 h-8">
+        {teamId && teamSlug && <NotificationBell teamId={teamId} teamSlug={teamSlug} />}
         <ThemeToggleButton />
         {isSelfHosted ? (
           <UserMenu />

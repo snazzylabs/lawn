@@ -1,4 +1,4 @@
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { Link, useParams } from "@tanstack/react-router";
@@ -12,8 +12,11 @@ import { GuestOnboardingDialog } from "@/components/comments/GuestOnboardingDial
 import { useGuestIdentity } from "@/lib/useGuestIdentity";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
+import { formatDuration, formatTimestamp, formatRelativeTime, getInitials } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, MessageSquare, X, Pencil, Trash2 } from "lucide-react";
+import { HelpButton } from "@/components/HelpDialog";
+import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
 import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
 import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
 import { useWatchData } from "./-watch.data";
@@ -58,6 +61,9 @@ export default function WatchPage() {
   // Guest edit state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const submitReview = useMutation(api.reviewSubmissions.submit);
 
   // Auto-open onboarding for first-time guests
   useEffect(() => {
@@ -78,8 +84,8 @@ export default function WatchPage() {
         setRangeMarker((prev) => prev ? { ...prev, outTime: currentTime } : { inTime: Math.max(0, currentTime - 5), outTime: currentTime });
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [currentTime]);
 
   useEffect(() => {
@@ -250,11 +256,18 @@ export default function WatchPage() {
   }
 
   const video = videoData.video;
+  const reactions = useQuery(
+    api.comments.getReactionsForVideo,
+    video?._id ? { videoId: video._id as Id<"videos"> } : "skip",
+  );
+  const userIdentifier = userId ?? guest?.guestId ?? "";
+  const userName = userId ? "You" : (guest?.name ?? "");
 
   const renderComment = (
     comment: {
       _id: string;
       userName: string;
+      userAvatarUrl?: string;
       text: string;
       timestampSeconds: number;
       endTimestampSeconds?: number;
@@ -266,6 +279,7 @@ export default function WatchPage() {
       replies: Array<{
         _id: string;
         userName: string;
+        userAvatarUrl?: string;
         text: string;
         timestampSeconds: number;
         _creationTime: number;
@@ -281,162 +295,216 @@ export default function WatchPage() {
 
     return (
       <article key={comment._id} className={`border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3${comment.resolved ? " opacity-50" : ""}`}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-bold text-[#1a1a1a] flex items-center gap-1.5">
-            {comment.userName}
-            {comment.userCompany && (
-              <span className="text-xs font-normal italic text-[#888] ml-1">– {comment.userCompany}</span>
-            )}
-            {comment.resolved && (
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#888] ml-1">Resolved</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {comment.isGuestOwned && editingCommentId !== comment._id && (
-              <>
-                <button
-                  type="button"
-                  className="text-[#888] hover:text-[#1a1a1a]"
-                  onClick={() => {
-                    setEditingCommentId(comment._id);
-                    setEditingText(comment.text);
-                  }}
-                  title="Edit"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  className="text-[#888] hover:text-[#dc2626]"
-                  onClick={() => void handleDelete(comment._id)}
-                  title="Delete"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
-              onClick={() => seekTo(comment.timestampSeconds)}
-            >
-              {formatTimestamp(comment.timestampSeconds)}
-              {comment.endTimestampSeconds != null && (
-                <> – {formatTimestamp(comment.endTimestampSeconds)}</>
-              )}
-            </button>
-          </div>
-        </div>
-        {editingCommentId === comment._id ? (
-          <div className="mt-1 space-y-1">
-            <textarea
-              value={editingText}
-              onChange={(e) => setEditingText(e.target.value)}
-              className="w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm focus:outline-none"
-              rows={2}
-            />
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => void handleEditSave(comment._id)}
-                disabled={!editingText.trim()}
-              >
-                Save
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setEditingCommentId(null)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap">{comment.text}</p>
-        )}
-        {comment.drawingData && (
-          <img
-            src={comment.drawingData}
-            alt="Drawing annotation"
-            className="mt-2 border border-[#ccc] max-h-32 w-auto"
-          />
-        )}
-        <p className="text-[11px] text-[#888] mt-1">{formatRelativeTime(comment._creationTime)}</p>
-
-        {comment.replies.length > 0 ? (
-          <div className="mt-3 ml-4 border-l-2 border-[#1a1a1a] pl-3 space-y-2">
-            {comment.replies.map((reply) => (
-              <div key={reply._id} className="text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
-                  <div className="flex items-center gap-2">
-                    {reply.isGuestOwned && editingCommentId !== reply._id && (
-                      <>
-                        <button
-                          type="button"
-                          className="text-[#888] hover:text-[#1a1a1a]"
-                          onClick={() => {
-                            setEditingCommentId(reply._id);
-                            setEditingText(reply.text);
-                          }}
-                          title="Edit"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          className="text-[#888] hover:text-[#dc2626]"
-                          onClick={() => void handleDelete(reply._id)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </>
-                    )}
+        <div className="flex items-start gap-2.5">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarImage src={comment.userAvatarUrl} />
+            <AvatarFallback className="text-[9px]">{getInitials(comment.userName)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-bold text-[#1a1a1a] flex items-center gap-1.5">
+                {comment.userName}
+                {comment.userCompany && (
+                  <span className="text-xs font-normal italic text-[#888] ml-1">· {comment.userCompany}</span>
+                )}
+                {comment.resolved && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#888] ml-1">Resolved</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {comment.isGuestOwned && editingCommentId !== comment._id && (
+                  <>
                     <button
                       type="button"
-                      className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
-                      onClick={() => seekTo(reply.timestampSeconds)}
+                      className="text-[#888] hover:text-[#1a1a1a]"
+                      onClick={() => {
+                        setEditingCommentId(comment._id);
+                        setEditingText(comment.text);
+                      }}
+                      title="Edit"
                     >
-                      {formatTimestamp(reply.timestampSeconds)}
+                      <Pencil className="h-3 w-3" />
                     </button>
-                  </div>
+                    <button
+                      type="button"
+                      className="text-[#888] hover:text-[#dc2626]"
+                      onClick={() => void handleDelete(comment._id)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
+                  onClick={() => seekTo(comment.timestampSeconds)}
+                >
+                  {formatTimestamp(comment.timestampSeconds)}
+                  {comment.endTimestampSeconds != null && (
+                    <> – {formatTimestamp(comment.endTimestampSeconds)}</>
+                  )}
+                </button>
+              </div>
+            </div>
+            {editingCommentId === comment._id ? (
+              <div className="mt-1 space-y-1">
+                <textarea
+                  value={editingText}
+                  onChange={(e) => setEditingText(e.target.value)}
+                  className="w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm focus:outline-none"
+                  rows={2}
+                />
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    className="h-7 px-3 text-xs"
+                    onClick={() => void handleEditSave(comment._id)}
+                    disabled={!editingText.trim()}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-3 text-xs"
+                    onClick={() => setEditingCommentId(null)}
+                  >
+                    Cancel
+                  </Button>
                 </div>
-                {editingCommentId === reply._id ? (
-                  <div className="mt-1 space-y-1">
-                    <textarea
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      className="w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm focus:outline-none"
-                      rows={2}
-                    />
-                    <div className="flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={() => void handleEditSave(reply._id)}
-                        disabled={!editingText.trim()}
+              </div>
+            ) : (
+              <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap">{comment.text}</p>
+            )}
+            {comment.drawingData && (
+              <img
+                src={comment.drawingData}
+                alt="Drawing annotation"
+                className="mt-2 border border-[#ccc] max-h-32 w-auto"
+              />
+            )}
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-[11px] text-[#888]">{formatRelativeTime(comment._creationTime)}</p>
+              {canComment && (
+                <button
+                  type="button"
+                  className="text-[11px] font-bold text-[#888] hover:text-[#2F6DB4]"
+                  onClick={() => setReplyingToCommentId(replyingToCommentId === comment._id ? null : comment._id)}
+                >
+                  Reply
+                </button>
+              )}
+            </div>
+            {userIdentifier && userName && (
+              <div className="mt-1.5">
+                <EmojiReactionPicker
+                  commentId={comment._id as Id<"comments">}
+                  reactions={reactions?.[comment._id]}
+                  currentUserIdentifier={userIdentifier}
+                  currentUserName={userName}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {comment.replies.length > 0 ? (
+          <div className="mt-3 ml-9 border-l-2 border-[#1a1a1a] pl-3 space-y-2">
+            {comment.replies.map((reply) => (
+              <div key={reply._id} className="text-sm flex items-start gap-2">
+                <Avatar className="h-6 w-6 shrink-0">
+                  <AvatarImage src={reply.userAvatarUrl} />
+                  <AvatarFallback className="text-[8px]">{getInitials(reply.userName)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
+                    <div className="flex items-center gap-2">
+                      {reply.isGuestOwned && editingCommentId !== reply._id && (
+                        <>
+                          <button
+                            type="button"
+                            className="text-[#888] hover:text-[#1a1a1a]"
+                            onClick={() => {
+                              setEditingCommentId(reply._id);
+                              setEditingText(reply.text);
+                            }}
+                            title="Edit"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            className="text-[#888] hover:text-[#dc2626]"
+                            onClick={() => void handleDelete(reply._id)}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-[#2F6DB4] hover:text-[#1a1a1a]"
+                        onClick={() => seekTo(reply.timestampSeconds)}
                       >
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditingCommentId(null)}
-                      >
-                        Cancel
-                      </Button>
+                        {formatTimestamp(reply.timestampSeconds)}
+                      </button>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-[#1a1a1a] whitespace-pre-wrap">{reply.text}</p>
-                )}
+                  {editingCommentId === reply._id ? (
+                    <div className="mt-1 space-y-1">
+                      <textarea
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        className="w-full border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm focus:outline-none"
+                        rows={2}
+                      />
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="h-7 px-3 text-xs"
+                          onClick={() => void handleEditSave(reply._id)}
+                          disabled={!editingText.trim()}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-3 text-xs"
+                          onClick={() => setEditingCommentId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[#1a1a1a] whitespace-pre-wrap">{reply.text}</p>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         ) : null}
+
+        {replyingToCommentId === comment._id && canComment && (
+          <div className="mt-3 ml-9">
+            <CommentInput
+              timestampSeconds={currentTime}
+              onSubmitComment={userId ? undefined : handleSubmitComment}
+              videoId={userId ? video._id : undefined}
+              parentId={comment._id as Id<"comments">}
+              autoFocus
+              placeholder="Write a reply..."
+              onSubmit={() => setReplyingToCommentId(null)}
+              onCancel={() => setReplyingToCommentId(null)}
+            />
+          </div>
+        )}
       </article>
     );
   };
@@ -496,6 +564,31 @@ export default function WatchPage() {
               <span className="hidden sm:inline text-[#ccc]">·</span>
               <span className="hidden sm:inline font-mono">{formatDuration(video.duration)}</span>
             </>
+          )}
+          <HelpButton />
+          {canComment && (
+            <Button
+              size="sm"
+              className="h-8"
+              disabled={reviewSubmitted}
+              onClick={async () => {
+                if (!video?._id) return;
+                try {
+                  await submitReview({
+                    videoId: video._id as Id<"videos">,
+                    submittedByName: guest?.name ?? "User",
+                    submittedByCompany: guest?.company,
+                    guestSessionId: guest?.guestId,
+                    userClerkId: userId ?? undefined,
+                  });
+                  setReviewSubmitted(true);
+                } catch (e) {
+                  console.error("Failed to submit review:", e);
+                }
+              }}
+            >
+              {reviewSubmitted ? "Review Submitted \u2713" : "Submit Review"}
+            </Button>
           )}
           <Button
             variant="outline"

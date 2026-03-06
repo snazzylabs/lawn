@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useRef, useEffect } from "react";
 import { CommentInput } from "./CommentInput";
+import { EmojiReactionPicker } from "./EmojiReactionPicker";
 
 interface Comment {
   _id: Id<"comments">;
@@ -44,6 +45,9 @@ interface CommentItemProps {
   isHighlighted?: boolean;
   isReply?: boolean;
   canResolve?: boolean;
+  reactions?: Array<{ emoji: string; count: number; userIdentifiers: string[] }>;
+  currentUserIdentifier?: string;
+  currentUserName?: string;
 }
 
 export function CommentItem({
@@ -57,6 +61,9 @@ export function CommentItem({
   isHighlighted = false,
   isReply = false,
   canResolve = false,
+  reactions,
+  currentUserIdentifier,
+  currentUserName,
 }: CommentItemProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -173,10 +180,10 @@ export function CommentItem({
         </Avatar>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 overflow-hidden">
               <span className="font-bold text-sm text-[#1a1a1a] truncate">
                 {comment.userName}
-                {comment.userCompany && <span className="text-xs font-normal italic text-[#888] ml-1">– {comment.userCompany}</span>}
+                {comment.userCompany && <span className="text-xs font-normal italic text-[#888] ml-1">· {comment.userCompany}</span>}
               </span>
               <button
                 onClick={() => onTimestampClick(comment.timestampSeconds)}
@@ -198,7 +205,7 @@ export function CommentItem({
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 flex-shrink-0">
                   <MoreVertical className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>
@@ -291,6 +298,16 @@ export function CommentItem({
               <p className="text-[11px] text-[#888] mt-1">
                 {formatRelativeTime(comment._creationTime)}
               </p>
+              {currentUserIdentifier && currentUserName && (
+                <div className="mt-1.5">
+                  <EmojiReactionPicker
+                    commentId={comment._id}
+                    reactions={reactions}
+                    currentUserIdentifier={currentUserIdentifier}
+                    currentUserName={currentUserName}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

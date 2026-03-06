@@ -1,11 +1,13 @@
 
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
+
 import { api } from "@convex/_generated/api";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { DropZone } from "@/components/upload/DropZone";
 import { UploadProgress } from "@/components/upload/UploadProgress";
 import { UploadButton } from "@/components/upload/UploadButton";
+import { Button } from "@/components/ui/button";
 import { formatDuration, formatRelativeTime } from "@/lib/utils";
 import { triggerDownload } from "@/lib/download";
 import {
@@ -143,6 +145,7 @@ export default function ProjectPage({
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
   const generateProjectPublicId = useMutation(api.projects.generatePublicId);
+  const shortenUrl = useAction(api.shortLinks.shortenUrl);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [shareToast, setShareToast] = useState<ShareToastState | null>(null);
@@ -279,13 +282,8 @@ export default function ProjectPage({
     <div className="h-full flex flex-col">
       {/* Header */}
       <DashboardHeader paths={[
-        {
-          label: "Snazzy Labs",
-          href: teamHomePath(resolvedTeamSlug),
-          prewarmIntentHandlers: prewarmTeamIntentHandlers,
-        },
         { label: project?.name ?? "\u00A0" }
-      ]}>
+      ]} teamId={context?.team._id} teamSlug={resolvedTeamSlug}>
         <div className={cn(
           "flex items-center gap-2 transition-opacity duration-300 flex-shrink-0",
           isLoadingData ? "opacity-0" : "opacity-100"
@@ -317,13 +315,13 @@ export default function ProjectPage({
           </div>
           {canUpload && (
             <>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#1a1a1a] text-sm font-bold text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f0f0e8] transition-colors"
+              <Button
                 onClick={async () => {
                   try {
                     const pid = await generateProjectPublicId({ projectId: projectId as Id<"projects"> });
-                    const url = `${window.location.origin}/projects/${pid}`;
+                    const longUrl = `${window.location.origin}/projects/${pid}`;
+                    const result = await shortenUrl({ longUrl });
+                    const url = result?.shortUrl ?? longUrl;
                     await navigator.clipboard.writeText(url);
                     showShareToast("success", "Project share link copied");
                   } catch {
@@ -331,9 +329,9 @@ export default function ProjectPage({
                   }
                 }}
               >
-                <Share2 className="h-3.5 w-3.5" />
+                <Share2 className="h-3.5 w-3.5 mr-1.5" />
                 Share Project
-              </button>
+              </Button>
               <UploadButton onFilesSelected={handleFilesSelected} />
             </>
           )}

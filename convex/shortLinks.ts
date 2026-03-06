@@ -71,6 +71,46 @@ export const createShortLink = action({
   },
 });
 
+export const shortenUrl = action({
+  args: {
+    longUrl: v.string(),
+  },
+  returns: v.union(
+    v.object({ shortUrl: v.string() }),
+    v.null(),
+  ),
+  handler: async (_ctx, args) => {
+    const apiKey = getSnazzyApiKey();
+    const alias = generateAlias();
+
+    try {
+      const response = await fetch(`${SNAZZY_API_BASE}/url/add`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: args.longUrl,
+          custom: alias,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error && data.error !== 0 && data.error !== "0") {
+        console.error("snazzy.fm API error:", data.message);
+        return null;
+      }
+
+      return { shortUrl: data.shorturl as string };
+    } catch (error) {
+      console.error("Failed to shorten URL:", error);
+      return null;
+    }
+  },
+});
+
 export const deleteShortLink = action({
   args: {
     shortLinkId: v.number(),

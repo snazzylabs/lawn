@@ -58,12 +58,23 @@ export function CommentInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createComment = useMutation(api.comments.create);
 
+  // Auto-activate range mode when externalRange transitions from null to non-null
+  const prevExternalRangeRef = useRef(externalRange);
   useEffect(() => {
-    if (externalRange && rangeMode) {
+    const wasNull = prevExternalRangeRef.current == null;
+    prevExternalRangeRef.current = externalRange;
+    if (externalRange && wasNull && !rangeMode) {
+      setRangeMode(true);
+      textareaRef.current?.focus();
+    }
+  }, [externalRange, rangeMode]);
+
+  useEffect(() => {
+    if (externalRange) {
       setInTime(formatTimestampInput(externalRange.inTime));
       setOutTime(formatTimestampInput(externalRange.outTime));
     }
-  }, [externalRange, rangeMode]);
+  }, [externalRange]);
 
   const defaultPlaceholder = showTimestamp 
     ? `Comment at ${formatTimestamp(timestampSeconds)}...` 
@@ -112,7 +123,7 @@ export function CommentInput({
   };
 
   const submitComment = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() && pendingFiles.length === 0) return;
 
     setIsLoading(true);
     try {
@@ -162,6 +173,12 @@ export function CommentInput({
       void submitComment();
     }
     if (e.key === "Escape") {
+      if (rangeMode) {
+        setRangeMode(false);
+        setInTime("");
+        setOutTime("");
+        onRangeChange?.(null);
+      }
       onCancel?.();
     }
   };
@@ -299,7 +316,7 @@ export function CommentInput({
           variant={variant === "seamless" ? "ghost" : "primary"}
           size="icon"
           className="h-8 w-8 shrink-0 disabled:opacity-50"
-          disabled={!text.trim() || isLoading}
+          disabled={(!text.trim() && pendingFiles.length === 0) || isLoading}
         >
           <Send className="h-4 w-4" />
         </Button>

@@ -25,6 +25,8 @@ interface CommentListProps {
   highlightedCommentId?: Id<"comments">;
   canResolve?: boolean;
   onVisibleIdsChange?: (ids: Set<string>) => void;
+  currentUserIdentifier?: string;
+  currentUserName?: string;
 }
 
 export function CommentList({
@@ -39,9 +41,12 @@ export function CommentList({
   highlightedCommentId,
   canResolve = false,
   onVisibleIdsChange,
+  currentUserIdentifier,
+  currentUserName,
 }: CommentListProps) {
   const queriedComments = useQuery(api.comments.getThreaded, { videoId });
   const comments = providedComments ?? queriedComments;
+  const reactions = useQuery(api.comments.getReactionsForVideo, { videoId });
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ResolvedFilter>("all");
 
@@ -172,6 +177,9 @@ export function CommentList({
                   externalEditRange={externalEditRange}
                   isHighlighted={highlightedCommentId === comment._id}
                   canResolve={canResolve}
+                  reactions={reactions?.[comment._id as string]}
+                  currentUserIdentifier={currentUserIdentifier}
+                  currentUserName={currentUserName}
                 />
                 {comment.replies.length > 0 && (
                   <div className="pl-14 pr-4 pb-4 space-y-4 relative">

@@ -188,7 +188,7 @@ export default function TeamPage() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <DashboardHeader paths={[{ label: "Snazzy Labs" }]}>
+      <DashboardHeader paths={[]} teamId={team._id} teamSlug={team.slug}>
         {canManageMembers && (
           <Button
             variant="outline"

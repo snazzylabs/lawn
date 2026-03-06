@@ -47,9 +47,12 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
   const setVisibility = useMutation(api.videos.setVisibility);
   const createShortLink = useAction(api.shortLinks.createShortLink);
 
+  const shortenUrl = useAction(api.shortLinks.shortenUrl);
+
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [publicShortUrl, setPublicShortUrl] = useState<string | null>(null);
   const [newLinkOptions, setNewLinkOptions] = useState({
     expiresInDays: undefined as number | undefined,
     password: undefined as string | undefined,
@@ -85,6 +88,12 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     setIsUpdatingVisibility(true);
     try {
       await setVisibility({ videoId, visibility });
+      if (visibility === "public" && video.publicId) {
+        const longUrl = `${window.location.origin}/watch/${video.publicId}`;
+        void shortenUrl({ longUrl }).then((result) => {
+          if (result?.shortUrl) setPublicShortUrl(result.shortUrl);
+        }).catch(() => {});
+      }
     } catch (error) {
       console.error("Failed to update visibility:", error);
     } finally {
@@ -101,7 +110,8 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
 
   const handleCopyPublicLink = () => {
     if (!video?.publicId) return;
-    const url = `${window.location.origin}/watch/${video.publicId}`;
+    const longUrl = `${window.location.origin}/watch/${video.publicId}`;
+    const url = publicShortUrl ?? longUrl;
     navigator.clipboard.writeText(url);
     setCopiedId("public");
     setTimeout(() => setCopiedId(null), 2000);

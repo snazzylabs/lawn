@@ -204,6 +204,36 @@ export default defineSchema({
     .index("by_video", ["videoId"])
     .index("by_status_created", ["status", "createdAt"]),
 
+  reviewSubmissions: defineTable({
+    videoId: v.id("videos"),
+    submittedByName: v.string(),
+    submittedByCompany: v.optional(v.string()),
+    submittedAt: v.number(),
+    guestSessionId: v.optional(v.string()),
+    userClerkId: v.optional(v.string()),
+  }).index("by_video", ["videoId"]),
+
+  notifications: defineTable({
+    teamId: v.id("teams"),
+    videoId: v.id("videos"),
+    projectId: v.id("projects"),
+    type: v.string(),
+    message: v.string(),
+    read: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_team_and_read", ["teamId", "read"]),
+
+  commentReactions: defineTable({
+    commentId: v.id("comments"),
+    emoji: v.string(),
+    userIdentifier: v.string(),
+    userName: v.string(),
+  })
+    .index("by_comment", ["commentId"])
+    .index("by_comment_and_user", ["commentId", "userIdentifier"]),
+
   commentAttachments: defineTable({
     commentId: v.id("comments"),
     s3Key: v.string(),

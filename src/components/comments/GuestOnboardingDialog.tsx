@@ -56,7 +56,7 @@ export function GuestOnboardingDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="text-2xl">LEAVE FEEDBACK</DialogTitle>
           <DialogDescription className="text-[#888]">
@@ -83,11 +83,11 @@ export function GuestOnboardingDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
             {STEPS.map((step) => (
-              <div key={step.title} className="text-center space-y-2">
-                <div className="mx-auto w-10 h-10 border-2 border-[#1a1a1a] flex items-center justify-center">
-                  <step.icon className="h-5 w-5 text-[#2F6DB4]" />
+              <div key={step.title} className="text-center space-y-2 p-3">
+                <div className="mx-auto w-12 h-12 border-2 border-[#1a1a1a] flex items-center justify-center">
+                  <step.icon className="h-6 w-6 text-[#2F6DB4]" />
                 </div>
                 <div className="text-xs font-bold uppercase tracking-tight text-[#1a1a1a]">
                   {step.title}

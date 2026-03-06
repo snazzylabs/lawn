@@ -433,6 +433,89 @@ export const createAttachment = mutation({
   },
 });
 
+export const addReaction = mutation({
+  args: {
+    commentId: v.id("comments"),
+    emoji: v.string(),
+    userIdentifier: v.string(),
+    userName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("commentReactions")
+      .withIndex("by_comment_and_user", (q) =>
+        q.eq("commentId", args.commentId).eq("userIdentifier", args.userIdentifier),
+      )
+      .collect();
+
+    const alreadyReacted = existing.find((r) => r.emoji === args.emoji);
+    if (alreadyReacted) return;
+
+    await ctx.db.insert("commentReactions", {
+      commentId: args.commentId,
+      emoji: args.emoji,
+      userIdentifier: args.userIdentifier,
+      userName: args.userName,
+    });
+  },
+});
+
+export const removeReaction = mutation({
+  args: {
+    commentId: v.id("comments"),
+    emoji: v.string(),
+    userIdentifier: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("commentReactions")
+      .withIndex("by_comment_and_user", (q) =>
+        q.eq("commentId", args.commentId).eq("userIdentifier", args.userIdentifier),
+      )
+      .collect();
+
+    const match = existing.find((r) => r.emoji === args.emoji);
+    if (match) {
+      await ctx.db.delete(match._id);
+    }
+  },
+});
+
+export const getReactionsForVideo = query({
+  args: { videoId: v.id("videos") },
+  handler: async (ctx, args) => {
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
+      .collect();
+
+    const result: Record<string, Array<{ emoji: string; count: number; userIdentifiers: string[] }>> = {};
+
+    for (const comment of comments) {
+      const reactions = await ctx.db
+        .query("commentReactions")
+        .withIndex("by_comment", (q) => q.eq("commentId", comment._id))
+        .collect();
+
+      if (reactions.length === 0) continue;
+
+      const grouped: Record<string, string[]> = {};
+      for (const r of reactions) {
+        if (!grouped[r.emoji]) grouped[r.emoji] = [];
+        grouped[r.emoji].push(r.userIdentifier);
+      }
+
+      result[comment._id] = Object.entries(grouped).map(([emoji, userIds]) => ({
+        emoji,
+        count: userIds.length,
+        userIdentifiers: userIds,
+      }));
+    }
+
+    return result;
+  },
+});
+
 export const getAttachmentsByComment = query({
   args: { commentId: v.id("comments") },
   handler: async (ctx, args) => {

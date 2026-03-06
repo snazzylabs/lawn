@@ -101,6 +101,8 @@ export default function TeamSettingsPage() {
           },
           { label: "settings" },
         ]}
+        teamId={team._id}
+        teamSlug={team.slug}
       />
 
       <div className="flex-1 overflow-auto">
