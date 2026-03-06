@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -53,10 +53,69 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [publicShortUrl, setPublicShortUrl] = useState<string | null>(null);
+  const [isGeneratingPublicShortUrl, setIsGeneratingPublicShortUrl] = useState(false);
   const [newLinkOptions, setNewLinkOptions] = useState({
     expiresInDays: undefined as number | undefined,
     password: undefined as string | undefined,
   });
+  const isMountedRef = useRef(true);
+  const latestShortenRequestRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !video?.publicId || video.visibility !== "public") {
+      setPublicShortUrl(null);
+      setIsGeneratingPublicShortUrl(false);
+      return;
+    }
+
+    let cancelled = false;
+    const requestId = ++latestShortenRequestRef.current;
+    const longUrl = `${window.location.origin}/watch/${video.publicId}`;
+    setIsGeneratingPublicShortUrl(true);
+
+    void (async () => {
+      try {
+        const result = await shortenUrl({ longUrl });
+        if (
+          cancelled ||
+          !isMountedRef.current ||
+          latestShortenRequestRef.current !== requestId
+        ) {
+          return;
+        }
+        setPublicShortUrl(result?.shortUrl ?? null);
+      } catch (error) {
+        console.error("Failed to shorten public URL:", error);
+        if (
+          cancelled ||
+          !isMountedRef.current ||
+          latestShortenRequestRef.current !== requestId
+        ) {
+          return;
+        }
+        setPublicShortUrl(null);
+      } finally {
+        const canUpdate =
+          !cancelled &&
+          isMountedRef.current &&
+          latestShortenRequestRef.current === requestId;
+        if (canUpdate) {
+          setIsGeneratingPublicShortUrl(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, shortenUrl, video?.publicId, video?.visibility]);
 
   const handleCreateLink = async () => {
     setIsCreating(true);
@@ -71,11 +130,8 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         expiresInDays: undefined,
         password: undefined,
       });
-      // Fire-and-forget short link creation
       const longUrl = `${window.location.origin}/share/${result.token}`;
-      void createShortLink({ shareLinkId: result.linkId, longUrl }).catch((e) =>
-        console.error("Short link creation failed:", e),
-      );
+      await createShortLink({ shareLinkId: result.linkId, longUrl });
     } catch (error) {
       console.error("Failed to create share link:", error);
     } finally {
@@ -88,11 +144,8 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     setIsUpdatingVisibility(true);
     try {
       await setVisibility({ videoId, visibility });
-      if (visibility === "public" && video.publicId) {
-        const longUrl = `${window.location.origin}/watch/${video.publicId}`;
-        void shortenUrl({ longUrl }).then((result) => {
-          if (result?.shortUrl) setPublicShortUrl(result.shortUrl);
-        }).catch(() => {});
+      if (visibility === "private") {
+        setPublicShortUrl(null);
       }
     } catch (error) {
       console.error("Failed to update visibility:", error);
@@ -181,10 +234,10 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                   variant="outline"
                   className="flex-1"
                   onClick={handleCopyPublicLink}
-                  disabled={video?.visibility !== "public"}
+                  disabled={video?.visibility !== "public" || isGeneratingPublicShortUrl}
                 >
                   {copiedId === "public" ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                  Copy URL
+                  {isGeneratingPublicShortUrl ? "Preparing..." : "Copy URL"}
                 </Button>
                 <Button
                   variant="outline"

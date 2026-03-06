@@ -17,6 +17,7 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { CommentInput } from "./CommentInput";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
+import { CommentAttachments } from "./CommentAttachments";
 
 interface Comment {
   _id: Id<"comments">;
@@ -32,6 +33,14 @@ interface Comment {
   userAvatarUrl?: string;
   _creationTime: number;
   userClerkId?: string;
+  attachments?: Array<{
+    _id?: string;
+    filename: string;
+    fileSize: number;
+    contentType?: string;
+    s3Key?: string;
+    url?: string;
+  }>;
 }
 
 interface CommentItemProps {
@@ -48,6 +57,14 @@ interface CommentItemProps {
   reactions?: Array<{ emoji: string; count: number; userIdentifiers: string[] }>;
   currentUserIdentifier?: string;
   currentUserName?: string;
+  onSubmitComment?: (args: {
+    text: string;
+    timestampSeconds: number;
+    endTimestampSeconds?: number;
+    drawingData?: string;
+    parentId?: Id<"comments">;
+    files?: File[];
+  }) => Promise<void>;
 }
 
 export function CommentItem({
@@ -64,6 +81,7 @@ export function CommentItem({
   reactions,
   currentUserIdentifier,
   currentUserName,
+  onSubmitComment,
 }: CommentItemProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -295,6 +313,7 @@ export function CommentItem({
               <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap break-words">
                 {comment.text}
               </p>
+              <CommentAttachments attachments={comment.attachments} />
               <p className="text-[11px] text-[#888] mt-1">
                 {formatRelativeTime(comment._creationTime)}
               </p>
@@ -323,6 +342,7 @@ export function CommentItem({
             onCancel={() => setIsReplying(false)}
             autoFocus
             placeholder="Write a reply..."
+            onSubmitComment={onSubmitComment}
           />
         </div>
       )}

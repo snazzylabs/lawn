@@ -236,9 +236,12 @@ export default defineSchema({
 
   commentAttachments: defineTable({
     commentId: v.id("comments"),
+    videoId: v.optional(v.id("videos")),
     s3Key: v.string(),
     filename: v.string(),
     fileSize: v.number(),
     contentType: v.string(),
-  }).index("by_comment", ["commentId"]),
+  })
+    .index("by_comment", ["commentId"])
+    .index("by_video", ["videoId"]),
 });

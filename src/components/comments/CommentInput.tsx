@@ -5,7 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { formatTimestamp, formatTimestampInput, parseTimestampInput } from "@/lib/utils";
+import { formatBytes, formatTimestamp, formatTimestampInput, parseTimestampInput } from "@/lib/utils";
 import { Send, X, Scissors, Pencil, Paperclip } from "lucide-react";
 
 interface CommentInputProps {
@@ -98,10 +98,15 @@ export function CommentInput({
       setOutTime(formatTimestampInput(outSec));
       onRangeChange?.({ inTime: inSec, outTime: outSec });
     } else {
-      setInTime("");
-      setOutTime("");
-      onRangeChange?.(null);
+      clearRange();
     }
+  };
+
+  const clearRange = () => {
+    setRangeMode(false);
+    setInTime("");
+    setOutTime("");
+    onRangeChange?.(null);
   };
 
   const handleInTimeChange = (val: string) => {
@@ -174,24 +179,21 @@ export function CommentInput({
     }
     if (e.key === "Escape") {
       if (rangeMode) {
-        setRangeMode(false);
-        setInTime("");
-        setOutTime("");
-        onRangeChange?.(null);
+        clearRange();
       }
       onCancel?.();
     }
   };
 
   return (
-    <form 
-      onSubmit={handleSubmit} 
-      className={
-        variant === "seamless" 
-          ? "relative w-full bg-[#f0f0e8]"
-          : "relative w-full pb-1 pr-1"
-      }
-    >
+    <form onSubmit={handleSubmit} className="w-full">
+      <div
+        className={
+          variant === "seamless"
+            ? "w-full bg-[#f0f0e8]"
+            : "w-full bg-[#f0f0e8] border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)]"
+        }
+      >
       <textarea
         ref={textareaRef}
         value={text}
@@ -201,47 +203,80 @@ export function CommentInput({
         autoFocus={autoFocus}
         className={
           variant === "seamless"
-            ? "block w-full max-h-64 min-h-[100px] bg-transparent border-0 focus:ring-0 resize-none px-4 pt-4 pb-12 text-sm leading-relaxed text-[#1a1a1a] placeholder:text-[#888] font-sans outline-none transition-all"
-            : "block w-full max-h-64 min-h-[100px] bg-[#f0f0e8] border-2 border-[#1a1a1a] focus:ring-0 resize-none px-3 pt-3 pb-12 text-sm leading-relaxed text-[#1a1a1a] placeholder:text-[#888] font-sans outline-none shadow-[4px_4px_0px_0px_var(--shadow-color)] focus:translate-y-[2px] focus:translate-x-[2px] focus:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all"
+            ? "block w-full max-h-64 min-h-[100px] bg-transparent border-0 focus:ring-0 resize-none px-4 pt-4 pb-3 text-sm leading-relaxed text-[#1a1a1a] placeholder:text-[#888] font-sans outline-none"
+            : "block w-full max-h-64 min-h-[100px] bg-[#f0f0e8] border-0 focus:ring-0 resize-none px-3 pt-3 pb-3 text-sm leading-relaxed text-[#1a1a1a] placeholder:text-[#888] font-sans outline-none"
         }
         rows={3}
       />
       {rangeMode && (
-        <div className={
-          variant === "seamless"
-            ? "flex items-center gap-2 px-4 pb-1 text-xs"
-            : "flex items-center gap-2 px-3 pb-1 text-xs"
-        }>
-          <label className="font-mono text-[#888]">In</label>
+        <div
+          className={
+            variant === "seamless"
+              ? "mx-4 mb-2 border-2 border-[#1a1a1a] bg-[#e8e8e0] px-2 py-2 text-xs"
+              : "mx-3 mb-2 border-2 border-[#1a1a1a] bg-[#e8e8e0] px-2 py-2 text-xs"
+          }
+        >
+          <div className="flex items-center gap-2">
+            <Scissors className="h-3.5 w-3.5 text-[#2F6DB4]" />
+            <label className="font-mono text-[#666]">In</label>
           <input
             type="text"
             value={inTime}
             onChange={(e) => handleInTimeChange(e.target.value)}
-            className="w-20 border-2 border-[#1a1a1a] bg-[#f0f0e8] px-1.5 py-0.5 font-mono text-xs text-[#1a1a1a] focus:outline-none"
+              className="w-20 border-2 border-[#1a1a1a] bg-[#f0f0e8] px-1.5 py-0.5 font-mono text-xs text-[#1a1a1a] focus:outline-none"
             placeholder="mm:ss.ff"
           />
-          <label className="font-mono text-[#888]">Out</label>
+            <label className="font-mono text-[#666]">Out</label>
           <input
             type="text"
             value={outTime}
             onChange={(e) => handleOutTimeChange(e.target.value)}
-            className="w-20 border-2 border-[#1a1a1a] bg-[#f0f0e8] px-1.5 py-0.5 font-mono text-xs text-[#1a1a1a] focus:outline-none"
+              className="w-20 border-2 border-[#1a1a1a] bg-[#f0f0e8] px-1.5 py-0.5 font-mono text-xs text-[#1a1a1a] focus:outline-none"
             placeholder="mm:ss.ff"
           />
+            <button
+              type="button"
+              className="ml-auto inline-flex h-6 w-6 items-center justify-center border-2 border-[#1a1a1a] bg-[#f0f0e8] text-[#888] hover:text-[#dc2626]"
+              onClick={clearRange}
+              title="Clear range"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
       {pendingFiles.length > 0 && (
-        <div className={variant === "seamless" ? "flex flex-wrap gap-1 px-4 pb-1" : "flex flex-wrap gap-1 px-3 pb-1"}>
+        <div
+          className={
+            variant === "seamless"
+              ? "mx-4 mb-2 border border-[#1a1a1a]/30 bg-[#e8e8e0] px-2 py-2"
+              : "mx-3 mb-2 border border-[#1a1a1a]/30 bg-[#e8e8e0] px-2 py-2"
+          }
+        >
+          <div className="flex flex-wrap gap-1.5">
           {pendingFiles.map((file, idx) => (
-            <span key={idx} className="inline-flex items-center gap-1 text-[11px] bg-[#1a1a1a]/5 border border-[#ccc] px-1.5 py-0.5 text-[#1a1a1a]">
-              <Paperclip className="h-3 w-3 text-[#888]" />
-              {file.name}
-              <button type="button" onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))} className="text-[#888] hover:text-[#dc2626]">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1.5 text-[11px] border border-[#1a1a1a]/30 px-2 py-1 bg-[#f0f0e8] text-[#1a1a1a]"
+                title={file.name}
+              >
+                <Paperclip className="h-3.5 w-3.5 text-[#888]" />
+                <span className="max-w-[180px] truncate">{file.name}</span>
+                <span className="text-[#888]">{formatBytes(file.size)}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPendingFiles((prev) => prev.filter((_, i) => i !== idx))
+                  }
+                  className="text-[#888] hover:text-[#dc2626]"
+                  title="Remove file"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
           ))}
+          </div>
         </div>
       )}
       <input
@@ -260,17 +295,18 @@ export function CommentInput({
       <div
         className={
           variant === "seamless"
-            ? "absolute bottom-3 right-3 flex items-center gap-1.5"
-            : "absolute bottom-3 right-3 flex items-center gap-1.5"
+            ? "flex items-center justify-between px-4 pb-3 pt-1 border-t border-[#1a1a1a]/10"
+            : "flex items-center justify-between px-3 pb-3 pt-1 border-t border-[#1a1a1a]/10"
         }
       >
-        {!parentId && (
-          <>
+        <div className="flex items-center gap-1.5">
+          {!parentId && (
+            <>
             <Button
               type="button"
-              variant="ghost"
+                variant={rangeMode ? "default" : "ghost"}
               size="icon"
-              className={`h-8 w-8 shrink-0 ${rangeMode ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
+                className={`h-8 w-8 shrink-0 ${rangeMode ? "bg-[#2F6DB4] text-white hover:bg-[#255a94]" : ""}`}
               onClick={toggleRangeMode}
               title={rangeMode ? "Disable range mode" : "Mark in/out range"}
             >
@@ -292,14 +328,21 @@ export function CommentInput({
               type="button"
               variant="ghost"
               size="icon"
-              className={`h-8 w-8 shrink-0 ${pendingFiles.length > 0 ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
+                className={`relative h-8 w-8 shrink-0 ${pendingFiles.length > 0 ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
               onClick={() => fileInputRef.current?.click()}
               title="Attach files"
             >
               <Paperclip className="h-4 w-4" />
+                {pendingFiles.length > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-4 h-4 px-1 inline-flex items-center justify-center bg-[#2F6DB4] text-white text-[10px] font-bold border border-[#1a1a1a]">
+                    {pendingFiles.length}
+                  </span>
+                )}
             </Button>
-          </>
-        )}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
         {onCancel && (
           <Button
             type="button"
@@ -320,6 +363,8 @@ export function CommentInput({
         >
           <Send className="h-4 w-4" />
         </Button>
+        </div>
+      </div>
       </div>
     </form>
   );

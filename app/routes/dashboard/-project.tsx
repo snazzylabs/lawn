@@ -267,6 +267,58 @@ export default function ProjectPage({
     [projectId, resolvedTeamSlug, showShareToast],
   );
 
+  const handleShareProject = useCallback(async () => {
+    if (!resolvedProjectId) {
+      showShareToast("error", "Project is still loading");
+      return;
+    }
+
+    let publicId: string;
+    try {
+      publicId = await generateProjectPublicId({ projectId: resolvedProjectId });
+    } catch (error) {
+      console.error("Failed to generate project public ID:", error);
+      showShareToast("error", "Could not generate project link");
+      return;
+    }
+
+    const longUrl = `${window.location.origin}/projects/${publicId}`;
+    let shareUrl = longUrl;
+    let usedShortUrl = false;
+
+    try {
+      const result = await shortenUrl({ longUrl });
+      if (result?.shortUrl) {
+        shareUrl = result.shortUrl;
+        usedShortUrl = true;
+      }
+    } catch (error) {
+      console.error("Failed to shorten project URL:", error);
+    }
+
+    try {
+      const copied = await copyTextToClipboard(shareUrl);
+      if (!copied) {
+        showShareToast("error", "Clipboard unavailable");
+        return;
+      }
+      showShareToast(
+        "success",
+        usedShortUrl
+          ? "Project share link copied"
+          : "Project link copied (short link unavailable)",
+      );
+    } catch (error) {
+      console.error("Failed to copy project share URL:", error);
+      showShareToast("error", "Could not copy project link");
+    }
+  }, [
+    generateProjectPublicId,
+    resolvedProjectId,
+    shortenUrl,
+    showShareToast,
+  ]);
+
   // Not found state
   if (context === null || project === null) {
     return (
@@ -316,18 +368,7 @@ export default function ProjectPage({
           {canUpload && (
             <>
               <Button
-                onClick={async () => {
-                  try {
-                    const pid = await generateProjectPublicId({ projectId: projectId as Id<"projects"> });
-                    const longUrl = `${window.location.origin}/projects/${pid}`;
-                    const result = await shortenUrl({ longUrl });
-                    const url = result?.shortUrl ?? longUrl;
-                    await navigator.clipboard.writeText(url);
-                    showShareToast("success", "Project share link copied");
-                  } catch {
-                    showShareToast("error", "Could not generate share link");
-                  }
-                }}
+                onClick={() => void handleShareProject()}
               >
                 <Share2 className="h-3.5 w-3.5 mr-1.5" />
                 Share Project

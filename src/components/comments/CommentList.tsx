@@ -27,6 +27,14 @@ interface CommentListProps {
   onVisibleIdsChange?: (ids: Set<string>) => void;
   currentUserIdentifier?: string;
   currentUserName?: string;
+  onSubmitComment?: (args: {
+    text: string;
+    timestampSeconds: number;
+    endTimestampSeconds?: number;
+    drawingData?: string;
+    parentId?: Id<"comments">;
+    files?: File[];
+  }) => Promise<void>;
 }
 
 export function CommentList({
@@ -43,6 +51,7 @@ export function CommentList({
   onVisibleIdsChange,
   currentUserIdentifier,
   currentUserName,
+  onSubmitComment,
 }: CommentListProps) {
   const queriedComments = useQuery(api.comments.getThreaded, { videoId });
   const comments = providedComments ?? queriedComments;
@@ -180,6 +189,7 @@ export function CommentList({
                   reactions={reactions?.[comment._id as string]}
                   currentUserIdentifier={currentUserIdentifier}
                   currentUserName={currentUserName}
+                  onSubmitComment={onSubmitComment}
                 />
                 {comment.replies.length > 0 && (
                   <div className="pl-14 pr-4 pb-4 space-y-4 relative">
@@ -197,6 +207,7 @@ export function CommentList({
                         isHighlighted={highlightedCommentId === reply._id}
                         isReply
                         canResolve={canResolve}
+                        onSubmitComment={onSubmitComment}
                       />
                     ))}
                   </div>

@@ -795,22 +795,36 @@ export const getAttachmentUploadUrl = action({
     filename: v.string(),
     fileSize: v.number(),
     contentType: v.string(),
+    guestSessionId: v.optional(v.string()),
   },
   returns: v.object({
     url: v.string(),
     s3Key: v.string(),
   }),
   handler: async (ctx, args) => {
-    if (!ALLOWED_ATTACHMENT_TYPES.has(args.contentType)) {
+    const normalizedContentType = normalizeContentType(args.contentType);
+    if (!ALLOWED_ATTACHMENT_TYPES.has(normalizedContentType)) {
       throw new Error("File type not allowed");
     }
     if (args.fileSize > MAX_ATTACHMENT_SIZE) {
       throw new Error("File too large (max 100 MB)");
     }
 
-    const comment = await ctx.runQuery(api.comments.getById, { commentId: args.commentId });
+    const comment = await ctx.runQuery(internal.comments.getById, { commentId: args.commentId });
     if (!comment) {
       throw new Error("Comment not found");
+    }
+    const identity = await ctx.auth.getUserIdentity();
+    const identitySubject = identity?.subject;
+    const isCommentOwner =
+      (Boolean(identitySubject) &&
+        Boolean(comment.userClerkId) &&
+        identitySubject === comment.userClerkId) ||
+      (Boolean(comment.guestSessionId) &&
+        Boolean(args.guestSessionId) &&
+        comment.guestSessionId === args.guestSessionId);
+    if (!isCommentOwner) {
+      throw new Error("Only the comment owner can upload attachments");
     }
 
     const s3 = getS3SigningClient();
@@ -819,7 +833,7 @@ export const getAttachmentUploadUrl = action({
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
-      ContentType: args.contentType,
+      ContentType: normalizedContentType,
     });
     const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
 

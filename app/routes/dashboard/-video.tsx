@@ -22,6 +22,7 @@ import { downloadFCPXML, downloadPremiereCSV, downloadDaVinciEDL } from "@/lib/n
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { resolveAttachmentContentType } from "@/lib/attachments";
 import {
   Edit2,
   Check,
@@ -67,10 +68,13 @@ export default function VideoPage() {
     videoId,
   });
   const updateVideo = useMutation(api.videos.update);
+  const createComment = useMutation(api.comments.create);
+  const createAttachment = useMutation(api.comments.createAttachment);
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
   const getPlaybackSession = useAction(api.videoActions.getPlaybackSession);
   const getOriginalPlaybackUrl = useAction(api.videoActions.getOriginalPlaybackUrl);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
+  const getAttachmentUploadUrl = useAction(api.videoActions.getAttachmentUploadUrl);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -224,6 +228,65 @@ export default function VideoPage() {
       setHighlightedCommentId(undefined);
     },
     [playerRef, setHighlightedCommentId]
+  );
+
+  const handleSubmitComment = useCallback(
+    async (args: {
+      text: string;
+      timestampSeconds: number;
+      endTimestampSeconds?: number;
+      drawingData?: string;
+      parentId?: Id<"comments">;
+      files?: File[];
+    }) => {
+      if (!resolvedVideoId) return;
+
+      const commentId = await createComment({
+        videoId: resolvedVideoId,
+        text: args.text,
+        timestampSeconds: args.timestampSeconds,
+        endTimestampSeconds: args.endTimestampSeconds,
+        drawingData: args.drawingData,
+        parentId: args.parentId,
+      });
+
+      if (args.files?.length && commentId) {
+        await Promise.all(
+          args.files.map(async (file) => {
+            const contentType = resolveAttachmentContentType(file);
+            const { url, s3Key } = await getAttachmentUploadUrl({
+              commentId,
+              filename: file.name,
+              fileSize: file.size,
+              contentType,
+            });
+            const uploadResponse = await fetch(url, {
+              method: "PUT",
+              body: file,
+              headers: { "Content-Type": contentType },
+            });
+            if (!uploadResponse.ok) {
+              throw new Error("Attachment upload failed");
+            }
+            await createAttachment({
+              commentId,
+              s3Key,
+              filename: file.name,
+              fileSize: file.size,
+              contentType,
+            });
+          }),
+        );
+      }
+
+      setDrawingData(null);
+    },
+    [
+      createAttachment,
+      createComment,
+      getAttachmentUploadUrl,
+      resolvedVideoId,
+    ],
   );
 
   const handleEditingChange = useCallback(
@@ -586,6 +649,7 @@ export default function VideoPage() {
               onVisibleIdsChange={setVisibleCommentIds}
               currentUserIdentifier={context?.userSubject}
               currentUserName={video?.uploaderName}
+              onSubmitComment={handleSubmitComment}
             />
           </div>
           {canComment && (
@@ -595,6 +659,7 @@ export default function VideoPage() {
                 timestampSeconds={currentTime}
                 showTimestamp
                 variant="seamless"
+                onSubmitComment={handleSubmitComment}
                 onRangeChange={editingCommentId ? undefined : setRangeMarker}
                 externalRange={editingCommentId ? null : rangeMarker}
                 onDrawingRequest={() => setDrawingMode(true)}
@@ -643,6 +708,7 @@ export default function VideoPage() {
               onVisibleIdsChange={setVisibleCommentIds}
               currentUserIdentifier={context?.userSubject}
               currentUserName={video?.uploaderName}
+              onSubmitComment={handleSubmitComment}
             />
           </div>
           {canComment && (
@@ -652,6 +718,7 @@ export default function VideoPage() {
                 timestampSeconds={currentTime}
                 showTimestamp
                 variant="seamless"
+                onSubmitComment={handleSubmitComment}
                 onRangeChange={editingCommentId ? undefined : setRangeMarker}
                 externalRange={editingCommentId ? null : rangeMarker}
                 onDrawingRequest={() => setDrawingMode(true)}

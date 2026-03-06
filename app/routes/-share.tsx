@@ -17,11 +17,13 @@ import { formatDuration, formatTimestamp, formatRelativeTime, getInitials } from
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
-import { Lock, Video, AlertCircle, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { Lock, Video, AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { HelpButton } from "@/components/HelpDialog";
 import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
+import { CommentAttachments } from "@/components/comments/CommentAttachments";
 import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
 import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
+import { resolveAttachmentContentType } from "@/lib/attachments";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -61,6 +63,7 @@ export default function SharePage() {
 
   // Range state
   const [rangeMarker, setRangeMarker] = useState<{ inTime: number; outTime: number } | null>(null);
+  const currentTimeRef = useRef(0);
 
   // Guest edit state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -89,20 +92,26 @@ export default function SharePage() {
   }, [isGuestReady, isUserLoaded, userId, guest, grantToken]);
 
   useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT") return;
       if (e.key === "i" || e.key === "I") {
         e.preventDefault();
-        setRangeMarker((prev) => prev ? { ...prev, inTime: currentTime } : { inTime: currentTime, outTime: currentTime + 5 });
+        const time = currentTimeRef.current;
+        setRangeMarker((prev) => prev ? { ...prev, inTime: time } : { inTime: time, outTime: time + 5 });
       } else if (e.key === "o" || e.key === "O") {
         e.preventDefault();
-        setRangeMarker((prev) => prev ? { ...prev, outTime: currentTime } : { inTime: Math.max(0, currentTime - 5), outTime: currentTime });
+        const time = currentTimeRef.current;
+        setRangeMarker((prev) => prev ? { ...prev, outTime: time } : { inTime: Math.max(0, time - 5), outTime: time });
       }
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [currentTime]);
+  }, []);
 
   useEffect(() => {
     setGrantToken(null);
@@ -235,14 +244,30 @@ export default function SharePage() {
       if (args.files?.length && commentId) {
         for (const file of args.files) {
           try {
+            const contentType = resolveAttachmentContentType(file);
             const { url, s3Key } = await getAttachmentUploadUrl({
               commentId,
               filename: file.name,
               fileSize: file.size,
-              contentType: file.type || "application/octet-stream",
+              contentType,
+              guestSessionId: guest?.guestId,
             });
-            await fetch(url, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-            await createAttachmentMut({ commentId, s3Key, filename: file.name, fileSize: file.size, contentType: file.type || "application/octet-stream" });
+            const uploadResponse = await fetch(url, {
+              method: "PUT",
+              body: file,
+              headers: { "Content-Type": contentType },
+            });
+            if (!uploadResponse.ok) {
+              throw new Error("Attachment upload failed");
+            }
+            await createAttachmentMut({
+              commentId,
+              s3Key,
+              filename: file.name,
+              fileSize: file.size,
+              contentType,
+              guestSessionId: guest?.guestId,
+            });
           } catch (e) {
             console.error("Failed to upload attachment:", e);
           }
@@ -396,6 +421,14 @@ export default function SharePage() {
       timestampSeconds: number;
       endTimestampSeconds?: number;
       drawingData?: string;
+      attachments?: Array<{
+        _id?: string;
+        filename: string;
+        fileSize: number;
+        contentType?: string;
+        s3Key?: string;
+        url?: string;
+      }>;
       _creationTime: number;
       isGuestOwned?: boolean;
       resolved?: boolean;
@@ -406,6 +439,14 @@ export default function SharePage() {
         userCompany?: string;
         text: string;
         timestampSeconds: number;
+        attachments?: Array<{
+          _id?: string;
+          filename: string;
+          fileSize: number;
+          contentType?: string;
+          s3Key?: string;
+          url?: string;
+        }>;
         _creationTime: number;
         isGuestOwned?: boolean;
       }>;
@@ -487,6 +528,7 @@ export default function SharePage() {
           ) : (
             <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap">{comment.text}</p>
           )}
+          <CommentAttachments attachments={comment.attachments} />
           {comment.drawingData && (
             <img
               src={comment.drawingData}
@@ -594,6 +636,7 @@ export default function SharePage() {
                 ) : (
                   <p className="text-[#1a1a1a] whitespace-pre-wrap">{reply.text}</p>
                 )}
+                <CommentAttachments attachments={reply.attachments} />
               </div>
             </div>
           ))}
@@ -604,7 +647,7 @@ export default function SharePage() {
         <div className="mt-3 ml-9">
           <CommentInput
             timestampSeconds={currentTime}
-            onSubmitComment={userId ? undefined : handleSubmitComment}
+            onSubmitComment={handleSubmitComment}
             videoId={userId ? video._id : undefined}
             parentId={comment._id as Id<"comments">}
             autoFocus
@@ -758,7 +801,7 @@ export default function SharePage() {
               <CommentInput
                 timestampSeconds={currentTime}
                 showTimestamp
-                onSubmitComment={userId ? undefined : handleSubmitComment}
+                onSubmitComment={handleSubmitComment}
                 videoId={userId ? video._id : undefined}
                 onRangeChange={setRangeMarker}
                 externalRange={rangeMarker}

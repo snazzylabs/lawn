@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query, internalQuery, MutationCtx, QueryCtx } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import {
   identityAvatarUrl,
   identityName,
@@ -8,6 +9,7 @@ import {
   getUser,
 } from "./auth";
 import { resolveActiveShareGrant } from "./shareAccess";
+import { buildPublicContentUrl } from "./s3";
 
 function toThreadedComments<T extends { _id: string; parentId?: string; timestampSeconds: number; _creationTime: number }>(
   comments: T[],
@@ -38,6 +40,7 @@ function toPublicCommentPayload(
     userAvatarUrl?: string;
     guestSessionId?: string;
     userCompany?: string;
+    attachments?: AttachmentPayload[];
   },
   guestSessionId?: string,
 ) {
@@ -53,12 +56,62 @@ function toPublicCommentPayload(
     userName: comment.userName,
     userAvatarUrl: comment.userAvatarUrl,
     userCompany: comment.userCompany,
+    attachments: comment.attachments ?? [],
     isGuestOwned: Boolean(
       guestSessionId &&
         comment.guestSessionId &&
         comment.guestSessionId === guestSessionId,
     ),
   };
+}
+
+type AttachmentPayload = {
+  _id: Id<"commentAttachments">;
+  commentId: Id<"comments">;
+  s3Key: string;
+  filename: string;
+  fileSize: number;
+  contentType: string;
+  url: string;
+};
+
+async function withAttachmentPayload<T extends { _id: Id<"comments"> }>(
+  ctx: QueryCtx | MutationCtx,
+  comments: T[],
+): Promise<Array<T & { attachments: AttachmentPayload[] }>> {
+  if (comments.length === 0) {
+    return comments.map((comment) => ({ ...comment, attachments: [] }));
+  }
+
+  const uniqueCommentIds = [...new Set(comments.map((comment) => comment._id))];
+  const attachmentsByCommentId = new Map<Id<"comments">, AttachmentPayload[]>();
+
+  await Promise.all(
+    uniqueCommentIds.map(async (commentId) => {
+      const attachments = await ctx.db
+        .query("commentAttachments")
+        .withIndex("by_comment", (q) => q.eq("commentId", commentId))
+        .collect();
+
+      attachmentsByCommentId.set(
+        commentId,
+        attachments.map((attachment) => ({
+          _id: attachment._id,
+          commentId: attachment.commentId,
+          s3Key: attachment.s3Key,
+          filename: attachment.filename,
+          fileSize: attachment.fileSize,
+          contentType: attachment.contentType,
+          url: buildPublicContentUrl(attachment.s3Key),
+        })),
+      );
+    }),
+  );
+
+  return comments.map((comment) => ({
+    ...comment,
+    attachments: attachmentsByCommentId.get(comment._id) ?? [],
+  }));
 }
 
 async function getPublicVideoByPublicId(
@@ -77,7 +130,7 @@ async function getPublicVideoByPublicId(
   return video;
 }
 
-export const getById = query({
+export const getById = internalQuery({
   args: { commentId: v.id("comments") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.commentId);
@@ -358,7 +411,8 @@ export const getThreaded = query({
       .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
       .collect();
 
-    return toThreadedComments(comments);
+    const commentsWithAttachments = await withAttachmentPayload(ctx, comments);
+    return toThreadedComments(commentsWithAttachments);
   },
 });
 
@@ -378,8 +432,11 @@ export const getThreadedForPublic = query({
       .withIndex("by_video", (q) => q.eq("videoId", video._id))
       .collect();
 
+    const commentsWithAttachments = await withAttachmentPayload(ctx, comments);
     return toThreadedComments(
-      comments.map((c) => toPublicCommentPayload(c, args.guestSessionId)),
+      commentsWithAttachments.map((c) =>
+        toPublicCommentPayload(c, args.guestSessionId),
+      ),
     );
   },
 });
@@ -405,8 +462,11 @@ export const getThreadedForShareGrant = query({
       .withIndex("by_video", (q) => q.eq("videoId", video._id))
       .collect();
 
+    const commentsWithAttachments = await withAttachmentPayload(ctx, comments);
     return toThreadedComments(
-      comments.map((c) => toPublicCommentPayload(c, args.guestSessionId)),
+      commentsWithAttachments.map((c) =>
+        toPublicCommentPayload(c, args.guestSessionId),
+      ),
     );
   },
 });
@@ -418,13 +478,32 @@ export const createAttachment = mutation({
     filename: v.string(),
     fileSize: v.number(),
     contentType: v.string(),
+    guestSessionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const comment = await ctx.db.get(args.commentId);
     if (!comment) throw new Error("Comment not found");
 
+    const user = await getUser(ctx);
+    const userSubject = user?.subject;
+    const isCommentOwner =
+      (Boolean(userSubject) &&
+        Boolean(comment.userClerkId) &&
+        userSubject === comment.userClerkId) ||
+      (Boolean(comment.guestSessionId) &&
+        Boolean(args.guestSessionId) &&
+        comment.guestSessionId === args.guestSessionId);
+
+    if (!isCommentOwner) {
+      throw new Error("Only the comment owner can add attachments");
+    }
+    if (!args.s3Key.startsWith(`attachments/${args.commentId}/`)) {
+      throw new Error("Invalid attachment key");
+    }
+
     return await ctx.db.insert("commentAttachments", {
       commentId: args.commentId,
+      videoId: comment.videoId,
       s3Key: args.s3Key,
       filename: args.filename,
       fileSize: args.fileSize,
@@ -519,6 +598,12 @@ export const getReactionsForVideo = query({
 export const getAttachmentsByComment = query({
   args: { commentId: v.id("comments") },
   handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) {
+      return [];
+    }
+    await requireVideoAccess(ctx, comment.videoId);
+
     return await ctx.db
       .query("commentAttachments")
       .withIndex("by_comment", (q) => q.eq("commentId", args.commentId))
