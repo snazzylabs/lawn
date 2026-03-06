@@ -5,28 +5,36 @@ import { requireUser } from "./auth";
 export const getUnread = query({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    await requireUser(ctx);
+    const user = await requireUser(ctx);
 
-    return await ctx.db
+    const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_team_and_read", (q) =>
         q.eq("teamId", args.teamId).eq("read", false),
       )
       .order("desc")
-      .take(20);
+      .take(80);
+
+    return notifications
+      .filter((notification) => notification.actorUserClerkId !== user.subject)
+      .slice(0, 20);
   },
 });
 
 export const getAll = query({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    await requireUser(ctx);
+    const user = await requireUser(ctx);
 
-    return await ctx.db
+    const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
       .order("desc")
-      .take(50);
+      .take(120);
+
+    return notifications
+      .filter((notification) => notification.actorUserClerkId !== user.subject)
+      .slice(0, 50);
   },
 });
 

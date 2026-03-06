@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { getUser, requireTeamAccess, requireProjectAccess } from "./auth";
 import { assertTeamHasActiveSubscription } from "./billingHelpers";
 import { purgeAndDeleteVideo } from "./videos";
@@ -266,6 +267,7 @@ export const setNotionPage = mutation({
   args: {
     projectId: v.id("projects"),
     notionPageInput: v.string(),
+    projectUrl: v.optional(v.string()),
   },
   returns: v.object({
     notionPageId: v.optional(v.string()),
@@ -280,6 +282,13 @@ export const setNotionPage = mutation({
       notionPageUrl: normalized.notionPageUrl,
       lastActivityAt: Date.now(),
     });
+
+    if (normalized.notionPageId && args.projectUrl) {
+      await ctx.scheduler.runAfter(0, internal.notionActions.syncProjectProofUrl, {
+        notionPageId: normalized.notionPageId,
+        projectUrl: args.projectUrl,
+      });
+    }
 
     return normalized;
   },

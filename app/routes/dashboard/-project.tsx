@@ -23,6 +23,9 @@ import {
   MoreVertical,
   Trash2,
   Edit2,
+  Minus,
+  Search,
+  Loader2,
   Link as LinkIcon,
   Grid3X3,
   LayoutList,
@@ -40,7 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
-import { videoPath } from "@/lib/routes";
+import { projectPath, videoPath } from "@/lib/routes";
 import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import {
@@ -57,6 +60,13 @@ type ViewMode = "grid" | "list";
 type ShareToastState = {
   tone: "success" | "error";
   message: string;
+};
+
+type NotionSearchResult = {
+  pageId: string;
+  title: string;
+  url: string;
+  lastEditedTime?: string;
 };
 
 async function copyTextToClipboard(text: string) {
@@ -154,14 +164,20 @@ export default function ProjectPage({
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
   const setProjectNotionPage = useMutation(api.projects.setNotionPage);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
+  const searchNotionPages = useAction(api.notionActions.searchPagesForProject);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [shareToast, setShareToast] = useState<ShareToastState | null>(null);
   const [projectShareDialogOpen, setProjectShareDialogOpen] = useState(false);
   const [notionDialogOpen, setNotionDialogOpen] = useState(false);
   const [notionInput, setNotionInput] = useState("");
+  const [notionSearchQuery, setNotionSearchQuery] = useState("");
+  const [notionSearchResults, setNotionSearchResults] = useState<NotionSearchResult[]>([]);
+  const [isSearchingNotion, setIsSearchingNotion] = useState(false);
+  const [notionSearchReason, setNotionSearchReason] = useState<string | null>(null);
   const [isSavingNotionLink, setIsSavingNotionLink] = useState(false);
   const shareToastTimeoutRef = useRef<number | null>(null);
+  const notionSearchRequestRef = useRef(0);
 
   const shouldCanonicalize =
     !!context && !context.isCanonical && pathname !== context.canonicalPath;
@@ -191,6 +207,56 @@ export default function ProjectPage({
     if (!project) return;
     setNotionInput(project.notionPageUrl ?? project.notionPageId ?? "");
   }, [project?._id, project?.notionPageId, project?.notionPageUrl]);
+
+  useEffect(() => {
+    if (!notionDialogOpen || !project) return;
+    setNotionSearchQuery(project.name ?? "");
+    setNotionSearchReason(null);
+    setNotionSearchResults([]);
+  }, [notionDialogOpen, project?._id, project?.name]);
+
+  useEffect(() => {
+    if (!notionDialogOpen || !project) return;
+
+    const query = notionSearchQuery.trim();
+    if (query.length < 2) {
+      setNotionSearchResults([]);
+      setNotionSearchReason(null);
+      setIsSearchingNotion(false);
+      return;
+    }
+
+    const requestId = notionSearchRequestRef.current + 1;
+    notionSearchRequestRef.current = requestId;
+
+    const timeoutId = window.setTimeout(() => {
+      setIsSearchingNotion(true);
+      void searchNotionPages({
+        projectId: project._id,
+        query,
+        limit: 8,
+      })
+        .then((response) => {
+          if (notionSearchRequestRef.current !== requestId) return;
+          setNotionSearchResults(response.results);
+          setNotionSearchReason(response.reason ?? null);
+        })
+        .catch((error) => {
+          if (notionSearchRequestRef.current !== requestId) return;
+          console.error("Failed to search Notion pages:", error);
+          setNotionSearchResults([]);
+          setNotionSearchReason("search_failed");
+        })
+        .finally(() => {
+          if (notionSearchRequestRef.current !== requestId) return;
+          setIsSearchingNotion(false);
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [notionDialogOpen, notionSearchQuery, project, searchNotionPages]);
 
   const handleFilesSelected = useCallback(
     (files: File[]) => {
@@ -269,9 +335,13 @@ export default function ProjectPage({
     if (!project) return;
     setIsSavingNotionLink(true);
     try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
       const result = await setProjectNotionPage({
         projectId: project._id,
         notionPageInput: notionInput,
+        projectUrl: origin
+          ? `${origin}${projectPath(resolvedTeamSlug, project._id)}`
+          : undefined,
       });
       setNotionInput(result.notionPageUrl ?? result.notionPageId ?? "");
       setNotionDialogOpen(false);
@@ -285,7 +355,13 @@ export default function ProjectPage({
     } finally {
       setIsSavingNotionLink(false);
     }
-  }, [notionInput, project, setProjectNotionPage, showShareToast]);
+  }, [
+    notionInput,
+    project,
+    resolvedTeamSlug,
+    setProjectNotionPage,
+    showShareToast,
+  ]);
 
   const handleClearNotionLink = useCallback(async () => {
     if (!project) return;
@@ -396,17 +472,39 @@ export default function ProjectPage({
                 <Share2 className="h-3.5 w-3.5 mr-1.5" />
                 Share Project
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => setNotionDialogOpen(true)}
-              >
-                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                Link Notion
-              </Button>
               <UploadButton onFilesSelected={handleFilesSelected} />
+              {notionPageUrl ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                    Open Notion
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    disabled={isSavingNotionLink}
+                    onClick={() => void handleClearNotionLink()}
+                    title="Remove Notion link"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setNotionDialogOpen(true)}
+                >
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  Link Notion
+                </Button>
+              )}
             </>
           )}
-          {notionPageUrl ? (
+          {!canUpload && notionPageUrl ? (
             <Button
               variant="outline"
               onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
@@ -764,16 +862,71 @@ export default function ProjectPage({
           <DialogHeader>
             <DialogTitle>Link Notion page</DialogTitle>
             <DialogDescription>
-              Paste a Notion page URL or page ID for this project.
+              Search your Notion pages or paste a page URL/ID.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2">
+          <div className="space-y-3 py-2">
             <Input
               placeholder="https://www.notion.so/... or page ID"
               value={notionInput}
               onChange={(event) => setNotionInput(event.target.value)}
-              autoFocus
             />
+            <div className="border-2 border-[#1a1a1a] bg-[#e8e8e0]">
+              <div className="border-b-2 border-[#1a1a1a] p-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#888]" />
+                  <Input
+                    value={notionSearchQuery}
+                    onChange={(event) => setNotionSearchQuery(event.target.value)}
+                    className="pl-8"
+                    placeholder="Search Notion pages..."
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="max-h-52 overflow-y-auto">
+                {isSearchingNotion ? (
+                  <div className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-[#888]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Searching Notion...
+                  </div>
+                ) : notionSearchQuery.trim().length < 2 ? (
+                  <p className="px-3 py-4 text-sm text-[#888]">
+                    Type at least 2 characters to search.
+                  </p>
+                ) : notionSearchResults.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-[#888]">
+                    {notionSearchReason === "missing_notion_api_key"
+                      ? "Notion API key is not configured."
+                      : "No matching Notion pages found."}
+                  </p>
+                ) : (
+                  notionSearchResults.map((result) => {
+                    const editedAt = result.lastEditedTime
+                      ? Date.parse(result.lastEditedTime)
+                      : Number.NaN;
+                    return (
+                      <button
+                        key={result.pageId}
+                        type="button"
+                        className="w-full border-b border-[#1a1a1a]/20 px-3 py-2 text-left hover:bg-[#f0f0e8]"
+                        onClick={() => setNotionInput(result.url)}
+                      >
+                        <p className="truncate text-sm font-bold text-[#1a1a1a]">
+                          {result.title}
+                        </p>
+                        <p className="truncate text-xs text-[#888]">{result.url}</p>
+                        {!Number.isNaN(editedAt) ? (
+                          <p className="text-[10px] text-[#888]">
+                            Updated {formatRelativeTime(editedAt)}
+                          </p>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button

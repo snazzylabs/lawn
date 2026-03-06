@@ -146,6 +146,7 @@ async function createTeamNotificationForVideo(
     projectId: Id<"projects">;
     type: string;
     message: string;
+    actorUserClerkId?: string;
   },
 ) {
   const project = await ctx.db.get(args.projectId);
@@ -158,6 +159,7 @@ async function createTeamNotificationForVideo(
     projectId: args.projectId,
     type: args.type,
     message: args.message,
+    actorUserClerkId: args.actorUserClerkId,
     read: false,
     createdAt: now,
   });
@@ -303,6 +305,7 @@ export const create = mutation({
       projectId: video.projectId,
       type: args.parentId ? "comment_replied" : "comment_created",
       message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
+      actorUserClerkId: user.subject,
     });
 
     return commentId;
@@ -359,6 +362,7 @@ export const createForPublic = mutation({
       projectId: video.projectId,
       type: args.parentId ? "comment_replied" : "comment_created",
       message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
+      actorUserClerkId: user?.subject,
     });
     await scheduleNotionClientCommentNotification(ctx, {
       commentId,
@@ -425,6 +429,7 @@ export const createForShareGrant = mutation({
       projectId: video.projectId,
       type: args.parentId ? "comment_replied" : "comment_created",
       message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
+      actorUserClerkId: user?.subject,
     });
     await scheduleNotionClientCommentNotification(ctx, {
       commentId,

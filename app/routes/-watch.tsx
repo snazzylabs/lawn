@@ -206,7 +206,9 @@ export default function WatchPage() {
       const rawDrawing = canvas.toDataURL();
       if (!rawDrawing) return null;
 
-      const frame = playerRef.current?.captureFrame() ?? null;
+      const frame = playerRef.current
+        ? await playerRef.current.captureFrameWithFallback()
+        : null;
       if (!frame) return rawDrawing;
 
       try {
@@ -641,6 +643,7 @@ export default function WatchPage() {
           onRangeChange={setRangeMarker}
           externalRange={rangeMarker}
           onDrawingRequest={() => setDrawingMode(true)}
+          onClearDrawing={() => setDrawingData(null)}
           drawingData={drawingData}
         />
       ) : (

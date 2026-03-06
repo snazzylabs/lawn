@@ -198,28 +198,15 @@ export function CommentItem({
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-              <span className="font-bold text-sm text-[#1a1a1a] truncate">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <span className="block truncate font-bold text-sm text-[#1a1a1a]">
                 {comment.userName}
-                {comment.userCompany && <span className="text-xs font-normal italic text-[#888] ml-1">· {comment.userCompany}</span>}
               </span>
-              <button
-                onClick={() => onTimestampClick(comment.timestampSeconds)}
-                className="text-xs text-[#2F6DB4] hover:text-[#1a1a1a] font-mono font-bold shrink-0"
-              >
-                {formatTimestamp(comment.timestampSeconds)}
-                {comment.endTimestampSeconds !== undefined && `–${formatTimestamp(comment.endTimestampSeconds)}`}
-              </button>
-              {comment.drawingData && (
-                <span className="inline-flex items-center gap-0.5 text-[10px] text-[#2F6DB4]" title="Has annotation">
-                  <Pencil className="h-3 w-3" />
+              {comment.userCompany && (
+                <span className="mt-0.5 block truncate text-xs font-normal italic text-[#888]">
+                  {comment.userCompany}
                 </span>
-              )}
-              {comment.resolved && (
-                <Badge variant="success" className="text-[10px] shrink-0">
-                  Resolved
-                </Badge>
               )}
             </div>
             <DropdownMenu>
@@ -256,6 +243,25 @@ export function CommentItem({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => onTimestampClick(comment.timestampSeconds)}
+              className="text-xs text-[#2F6DB4] hover:text-[#1a1a1a] font-mono font-bold"
+            >
+              {formatTimestamp(comment.timestampSeconds)}
+              {comment.endTimestampSeconds !== undefined && `–${formatTimestamp(comment.endTimestampSeconds)}`}
+            </button>
+            {comment.drawingData && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-[#2F6DB4]" title="Has annotation">
+                <Pencil className="h-3 w-3" />
+              </span>
+            )}
+            {comment.resolved && (
+              <Badge variant="success" className="text-[10px] shrink-0">
+                Resolved
+              </Badge>
+            )}
           </div>
           {isEditing ? (
             <div className="mt-1 space-y-2">

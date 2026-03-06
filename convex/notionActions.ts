@@ -1,8 +1,8 @@
 "use node";
 
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { action, internalAction } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 
 const NOTION_API_BASE = "https://api.notion.com/v1";
@@ -47,6 +47,222 @@ function getMentionUserIds() {
 type NotionRichText =
   | { type: "text"; text: { content: string } }
   | { type: "mention"; mention: { type: "user"; user: { id: string } } };
+
+type NotionPageProperty = {
+  id: string;
+  type: string;
+  [key: string]: unknown;
+};
+
+type NotionSearchPageResult = {
+  pageId: string;
+  title: string;
+  url: string;
+  lastEditedTime?: string;
+};
+
+function notionHeaders(notionApiKey: string) {
+  return {
+    Authorization: `Bearer ${notionApiKey}`,
+    "Notion-Version": NOTION_VERSION,
+    "Content-Type": "application/json",
+  };
+}
+
+function normalizeNotionId(value: string | null | undefined): string {
+  return (value ?? "").replace(/-/g, "").trim().toLowerCase();
+}
+
+function getNotionSearchDatabaseId() {
+  const raw =
+    process.env.NOTION_PROJECTS_DATABASE_ID ??
+    process.env.NOTION_DATABASE_ID ??
+    "";
+  const normalized = normalizeNotionId(raw);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function extractNotionPageTitle(page: Record<string, unknown>): string {
+  const properties = page.properties as Record<string, unknown> | undefined;
+  if (properties && typeof properties === "object") {
+    for (const property of Object.values(properties)) {
+      if (!property || typeof property !== "object") continue;
+      const typedProperty = property as Record<string, unknown>;
+      if (typedProperty.type !== "title") continue;
+
+      const title = typedProperty.title;
+      if (!Array.isArray(title)) continue;
+      const content = title
+        .map((segment) => {
+          if (!segment || typeof segment !== "object") return "";
+          const plainText = (segment as Record<string, unknown>).plain_text;
+          return typeof plainText === "string" ? plainText : "";
+        })
+        .join("")
+        .trim();
+      if (content) return content;
+    }
+  }
+
+  const directTitle = page.title;
+  if (Array.isArray(directTitle)) {
+    const content = directTitle
+      .map((segment) => {
+        if (!segment || typeof segment !== "object") return "";
+        const plainText = (segment as Record<string, unknown>).plain_text;
+        return typeof plainText === "string" ? plainText : "";
+      })
+      .join("")
+      .trim();
+    if (content) return content;
+  }
+
+  return "Untitled";
+}
+
+function parentMatchesDatabaseId(
+  parent: Record<string, unknown> | undefined,
+  normalizedDatabaseId: string,
+) {
+  if (!parent) return false;
+
+  const databaseId = normalizeNotionId(
+    typeof parent.database_id === "string" ? parent.database_id : undefined,
+  );
+  if (databaseId && databaseId === normalizedDatabaseId) return true;
+
+  const dataSourceId = normalizeNotionId(
+    typeof parent.data_source_id === "string" ? parent.data_source_id : undefined,
+  );
+  if (dataSourceId && dataSourceId === normalizedDatabaseId) return true;
+
+  return false;
+}
+
+export const searchPagesForProject = action({
+  args: {
+    projectId: v.id("projects"),
+    query: v.string(),
+    limit: v.optional(v.number()),
+  },
+  returns: v.object({
+    results: v.array(
+      v.object({
+        pageId: v.string(),
+        title: v.string(),
+        url: v.string(),
+        lastEditedTime: v.optional(v.string()),
+      }),
+    ),
+    filteredToDatabase: v.boolean(),
+    reason: v.optional(v.string()),
+  }),
+  handler: async (ctx, args): Promise<{
+    results: NotionSearchPageResult[];
+    filteredToDatabase: boolean;
+    reason?: string;
+  }> => {
+    await ctx.runQuery(api.projects.get, { projectId: args.projectId });
+
+    const notionApiKey = getNotionApiKey();
+    if (!notionApiKey) {
+      return {
+        results: [],
+        filteredToDatabase: false,
+        reason: "missing_notion_api_key",
+      };
+    }
+
+    const trimmedQuery = args.query.trim();
+    if (trimmedQuery.length < 2) {
+      return {
+        results: [],
+        filteredToDatabase: false,
+      };
+    }
+
+    const pageSize = Math.min(20, Math.max(1, Math.floor(args.limit ?? 8)));
+    const normalizedDatabaseId = getNotionSearchDatabaseId();
+
+    try {
+      const response = await fetch(`${NOTION_API_BASE}/search`, {
+        method: "POST",
+        headers: notionHeaders(notionApiKey),
+        body: JSON.stringify({
+          query: trimmedQuery,
+          page_size: pageSize,
+          filter: {
+            property: "object",
+            value: "page",
+          },
+          sort: {
+            timestamp: "last_edited_time",
+            direction: "descending",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.error("Failed to search Notion pages", {
+          status: response.status,
+          response: responseText,
+        });
+        return {
+          results: [],
+          filteredToDatabase: Boolean(normalizedDatabaseId),
+          reason: `notion_http_${response.status}`,
+        };
+      }
+
+      const payload = (await response.json()) as {
+        results?: Array<Record<string, unknown>>;
+      };
+      const rawResults = payload.results ?? [];
+      const filteredPages = rawResults
+        .filter((item) => item.object === "page")
+        .filter((item) => {
+          if (!normalizedDatabaseId) return true;
+          const parent =
+            item.parent && typeof item.parent === "object"
+              ? (item.parent as Record<string, unknown>)
+              : undefined;
+          return parentMatchesDatabaseId(parent, normalizedDatabaseId);
+        });
+
+      const results: NotionSearchPageResult[] = [];
+      for (const item of filteredPages) {
+        const pageId = typeof item.id === "string" ? item.id : null;
+        const url = typeof item.url === "string" ? item.url : null;
+        if (!pageId || !url) continue;
+
+        const lastEditedTime =
+          typeof item.last_edited_time === "string"
+            ? item.last_edited_time
+            : undefined;
+
+        results.push({
+          pageId,
+          title: extractNotionPageTitle(item),
+          url,
+          lastEditedTime,
+        });
+      }
+
+      return {
+        results,
+        filteredToDatabase: Boolean(normalizedDatabaseId),
+      };
+    } catch (error) {
+      console.error("Notion page search failed", error);
+      return {
+        results: [],
+        filteredToDatabase: Boolean(normalizedDatabaseId),
+        reason: "notion_request_failed",
+      };
+    }
+  },
+});
 
 export const notifyProjectClientComment = internalAction({
   args: {
@@ -152,11 +368,7 @@ export const notifyProjectClientComment = internalAction({
     try {
       const response: Response = await fetch(`${NOTION_API_BASE}/comments`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${notionApiKey}`,
-          "Notion-Version": NOTION_VERSION,
-          "Content-Type": "application/json",
-        },
+        headers: notionHeaders(notionApiKey),
         body: JSON.stringify({
           parent: {
             page_id: project.notionPageId,
@@ -182,6 +394,115 @@ export const notifyProjectClientComment = internalAction({
       return { ok: true, skipped: false };
     } catch (error) {
       console.error("Notion comment sync failed", error);
+      return { ok: false, skipped: false, reason: "notion_request_failed" };
+    }
+  },
+});
+
+export const syncProjectProofUrl = internalAction({
+  args: {
+    notionPageId: v.string(),
+    projectUrl: v.string(),
+  },
+  returns: v.object({
+    ok: v.boolean(),
+    skipped: v.boolean(),
+    reason: v.optional(v.string()),
+  }),
+  handler: async (
+    _ctx,
+    args,
+  ): Promise<{ ok: boolean; skipped: boolean; reason?: string }> => {
+    const notionApiKey = getNotionApiKey();
+    if (!notionApiKey) {
+      return { ok: false, skipped: true, reason: "missing_notion_api_key" };
+    }
+
+    try {
+      const pageResponse = await fetch(`${NOTION_API_BASE}/pages/${args.notionPageId}`, {
+        method: "GET",
+        headers: notionHeaders(notionApiKey),
+      });
+
+      if (!pageResponse.ok) {
+        const responseText = await pageResponse.text();
+        console.error("Failed to load Notion page for Proof sync", {
+          status: pageResponse.status,
+          response: responseText,
+        });
+        return {
+          ok: false,
+          skipped: false,
+          reason: `notion_http_${pageResponse.status}`,
+        };
+      }
+
+      const page = (await pageResponse.json()) as { properties?: Record<string, NotionPageProperty> };
+      const proofProperty = page.properties?.["Proof?"];
+      if (!proofProperty) {
+        return { ok: false, skipped: true, reason: "proof_property_missing" };
+      }
+
+      const projectUrl = args.projectUrl.trim();
+      if (!projectUrl) {
+        return { ok: false, skipped: true, reason: "project_url_missing" };
+      }
+
+      let proofPatch: Record<string, unknown> | null = null;
+      if (proofProperty.type === "url") {
+        proofPatch = { url: projectUrl };
+      } else if (proofProperty.type === "rich_text") {
+        proofPatch = {
+          rich_text: [
+            {
+              type: "text",
+              text: { content: projectUrl },
+            },
+          ],
+        };
+      } else if (proofProperty.type === "title") {
+        proofPatch = {
+          title: [
+            {
+              type: "text",
+              text: { content: projectUrl },
+            },
+          ],
+        };
+      } else {
+        return {
+          ok: false,
+          skipped: true,
+          reason: `unsupported_property_type_${proofProperty.type}`,
+        };
+      }
+
+      const updateResponse = await fetch(`${NOTION_API_BASE}/pages/${args.notionPageId}`, {
+        method: "PATCH",
+        headers: notionHeaders(notionApiKey),
+        body: JSON.stringify({
+          properties: {
+            "Proof?": proofPatch,
+          },
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        const responseText = await updateResponse.text();
+        console.error("Failed to update Notion Proof? property", {
+          status: updateResponse.status,
+          response: responseText,
+        });
+        return {
+          ok: false,
+          skipped: false,
+          reason: `notion_http_${updateResponse.status}`,
+        };
+      }
+
+      return { ok: true, skipped: false };
+    } catch (error) {
+      console.error("Notion Proof sync failed", error);
       return { ok: false, skipped: false, reason: "notion_request_failed" };
     }
   },

@@ -72,6 +72,8 @@ interface VideoPlayerProps {
   /** Range editing: in/out handles */
   rangeMarker?: { inTime: number; outTime: number };
   onRangeMarkerDrag?: (handle: "in" | "out", time: number) => void;
+  /** Temporary in-point marker shown before out-point is selected. */
+  pendingInPoint?: number;
   /** Cap auto-quality to this max height (e.g. 720 for guests). */
   maxQualityHeight?: number;
 }
@@ -79,6 +81,10 @@ interface VideoPlayerProps {
 export interface VideoPlayerHandle {
   seekTo: (time: number, options?: { play?: boolean }) => void;
   captureFrame: () => string | null;
+  captureFrameWithFallback: () => Promise<string | null>;
+  play: () => void;
+  pause: () => void;
+  togglePlay: () => void;
 }
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
@@ -126,6 +132,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     onEditingMarkerDrag,
     rangeMarker,
     onRangeMarkerDrag,
+    pendingInPoint,
     maxQualityHeight,
   },
   ref
@@ -184,6 +191,16 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
     return markers;
   }, [comments, duration]);
+
+  const spriteForTime = useCallback(
+    (time: number): SpriteEntry | null => {
+      for (const s of sprites) {
+        if (time >= s.start && time < s.end) return s;
+      }
+      return sprites.length > 0 ? sprites[sprites.length - 1] : null;
+    },
+    [sprites],
+  );
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -254,7 +271,121 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }, []);
 
-  useImperativeHandle(ref, () => ({ seekTo, captureFrame }), [seekTo, captureFrame]);
+  const imageToDataUrl = useCallback(
+    (
+      sourceUrl: string,
+      crop?: { x: number; y: number; w: number; h: number },
+    ): Promise<string | null> =>
+      new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = crop?.w ?? img.naturalWidth;
+            canvas.height = crop?.h ?? img.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(null);
+              return;
+            }
+            if (crop) {
+              ctx.drawImage(
+                img,
+                crop.x,
+                crop.y,
+                crop.w,
+                crop.h,
+                0,
+                0,
+                crop.w,
+                crop.h,
+              );
+            } else {
+              ctx.drawImage(img, 0, 0);
+            }
+            resolve(canvas.toDataURL("image/png"));
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = sourceUrl;
+      }),
+    [],
+  );
+
+  const captureFrameWithFallback = useCallback(async (): Promise<string | null> => {
+    const directFrame = captureFrame();
+    if (directFrame) return directFrame;
+
+    const currentMediaTime = videoRef.current?.currentTime ?? currentTime;
+    const sprite = spriteForTime(currentMediaTime);
+    if (sprite) {
+      const spriteFrame = await imageToDataUrl(sprite.url, {
+        x: sprite.x,
+        y: sprite.y,
+        w: sprite.w,
+        h: sprite.h,
+      });
+      if (spriteFrame) return spriteFrame;
+    }
+
+    if (poster) {
+      return await imageToDataUrl(poster);
+    }
+
+    return null;
+  }, [captureFrame, currentTime, imageToDataUrl, poster, spriteForTime]);
+
+  const playVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const playPromise = video.play();
+    if (playPromise) {
+      playPromise.catch(() => {
+        // Ignore autoplay rejections from browser policy.
+      });
+    }
+    showControls();
+  }, [showControls]);
+
+  const pauseVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    showControls();
+  }, [showControls]);
+
+  const togglePlayback = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      playVideo();
+    } else {
+      pauseVideo();
+    }
+  }, [pauseVideo, playVideo]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      seekTo,
+      captureFrame,
+      captureFrameWithFallback,
+      play: playVideo,
+      pause: pauseVideo,
+      togglePlay: togglePlayback,
+    }),
+    [
+      captureFrame,
+      captureFrameWithFallback,
+      pauseVideo,
+      playVideo,
+      seekTo,
+      togglePlayback,
+    ],
+  );
 
   const handleSeekBy = useCallback(
     (delta: number) => {
@@ -284,24 +415,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     },
     [detectedFps, duration, onTimeUpdate, showControls],
   );
-
-  const togglePlay = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    showControls();
-
-    if (video.paused) {
-      const playPromise = video.play();
-      if (playPromise) {
-        playPromise.catch(() => {
-          // Ignore play errors caused by browser autoplay policies.
-        });
-      }
-    } else {
-      video.pause();
-    }
-  }, [showControls]);
 
   const setVideoVolume = useCallback((nextVolume: number) => {
     const video = videoRef.current;
@@ -525,16 +638,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       .catch(() => { if (!cancelled) setSprites([]); });
     return () => { cancelled = true; };
   }, [spriteVttUrl]);
-
-  const spriteForTime = useCallback(
-    (time: number): SpriteEntry | null => {
-      for (const s of sprites) {
-        if (time >= s.start && time < s.end) return s;
-      }
-      return sprites.length > 0 ? sprites[sprites.length - 1] : null;
-    },
-    [sprites],
-  );
 
   useEffect(() => {
     return () => {
@@ -997,6 +1100,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           ))}
 
         {/* Range bar for in/out comments */}
+        {pendingInPoint !== undefined && pendingInPoint !== null && duration > 0 && (
+          <div
+            className="absolute top-1/2 z-[14] h-5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-[#2F6DB4] bg-[#4DA7F8] shadow"
+            style={{ left: `${(pendingInPoint / duration) * 100}%` }}
+            title={`In point: ${formatTimestamp(pendingInPoint)}`}
+          />
+        )}
+
+        {/* Range bar for in/out comments */}
         {rangeMarker && duration > 0 && (
           <>
             <div
@@ -1185,7 +1297,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       <div className="flex flex-wrap items-center gap-2 text-white">
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+          onClick={(e) => { e.stopPropagation(); togglePlayback(); }}
           className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 transition hover:border-white/25 hover:bg-white/20"
           aria-label={isPlaying ? "Pause" : "Play"}
         >
@@ -1382,7 +1494,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         onKeyDown={(e) => {
           if (e.key === " " || e.key.toLowerCase() === "k") {
             e.preventDefault();
-            togglePlay();
+            togglePlayback();
             return;
           }
           if (e.shiftKey && e.key === "ArrowLeft") {
@@ -1429,6 +1541,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       >
         <video
           ref={videoRef}
+          crossOrigin="anonymous"
           poster={poster}
           className={cn(
             "h-full w-full object-contain transition-opacity duration-200",
@@ -1438,7 +1551,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           preload="auto"
           onClick={(e) => {
             e.stopPropagation();
-            togglePlay();
+            togglePlayback();
           }}
         />
 
@@ -1458,23 +1571,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
               <p className="text-sm font-medium text-white/85">Loading stream...</p>
             </div>
-          </div>
-        )}
-
-        {/* Big play button */}
-        {!isPlaying && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                togglePlay();
-              }}
-              className="pointer-events-auto inline-flex h-20 w-20 items-center justify-center rounded-full border border-white/15 bg-black/60 text-white shadow-lg transition hover:scale-[1.03] hover:border-white/30 hover:bg-black/75"
-              aria-label="Play video"
-            >
-              <Play className="ml-1 h-9 w-9" />
-            </button>
           </div>
         )}
 

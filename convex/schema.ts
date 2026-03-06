@@ -252,6 +252,7 @@ export default defineSchema({
     projectId: v.id("projects"),
     type: v.string(),
     message: v.string(),
+    actorUserClerkId: v.optional(v.string()),
     read: v.boolean(),
     createdAt: v.number(),
   })

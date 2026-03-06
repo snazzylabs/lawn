@@ -10,8 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { HelpCircle, MessageSquareText, Scissors, Pencil, Paperclip } from "lucide-react";
 import { OPEN_HELP_EVENT } from "@/lib/commentHotkeys";
+import { cn } from "@/lib/utils";
 
 const SHORTCUTS = [
+  { keys: ["Space"], description: "Play/Pause (outside text fields)" },
   { keys: ["N"], description: "Focus new comment" },
   { keys: ["I"], description: "Mark In point at current time" },
   { keys: ["O"], description: "Mark Out point and focus comment" },
@@ -28,7 +30,15 @@ const TOOLS = [
   { name: "Attach Files", description: "Upload PDFs, images, or videos with your notes", icon: Paperclip },
 ] as const;
 
-export function HelpButton() {
+type HelpButtonProps = {
+  className?: string;
+  variant?: "ghost" | "outline";
+};
+
+export function HelpButton({
+  className,
+  variant = "ghost",
+}: HelpButtonProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -40,9 +50,9 @@ export function HelpButton() {
   return (
     <>
       <Button
-        variant="ghost"
+        variant={variant}
         size="icon"
-        className="h-8 w-8"
+        className={cn("h-8 w-8", className)}
         onClick={() => setOpen(true)}
         title="Help & shortcuts"
       >

@@ -6,6 +6,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { formatBytes, formatTimestamp, formatTimestampInput, parseTimestampInput } from "@/lib/utils";
+import { ATTACH_COMMENT_FILES_EVENT } from "@/lib/commentHotkeys";
 import { Send, X, Scissors, Pencil, Paperclip } from "lucide-react";
 import { CommentDrawingThumbnail } from "./CommentDrawingThumbnail";
 
@@ -22,6 +23,7 @@ interface CommentInputProps {
   onRangeChange?: (range: { inTime: number; outTime: number } | null) => void;
   externalRange?: { inTime: number; outTime: number } | null;
   onDrawingRequest?: () => void;
+  onClearDrawing?: () => void;
   drawingData?: string | null;
   hotkeyTarget?: boolean;
   onSubmitComment?: (args: {
@@ -47,6 +49,7 @@ export function CommentInput({
   onRangeChange,
   externalRange,
   onDrawingRequest,
+  onClearDrawing,
   drawingData,
   hotkeyTarget = false,
   onSubmitComment,
@@ -60,6 +63,14 @@ export function CommentInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createComment = useMutation(api.comments.create);
+
+  const isVisibleTarget = (element: HTMLElement) => {
+    const style = window.getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden") {
+      return false;
+    }
+    return element.offsetParent !== null || style.position === "fixed";
+  };
 
   // Auto-activate range mode when externalRange transitions from null to non-null
   const prevExternalRangeRef = useRef(externalRange);
@@ -90,6 +101,29 @@ export function CommentInput({
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [text]);
+
+  useEffect(() => {
+    if (!hotkeyTarget) return;
+
+    const handleAttachFiles = (event: Event) => {
+      const customEvent = event as CustomEvent<{ files?: File[] }>;
+      const files = customEvent.detail?.files ?? [];
+      if (files.length === 0) return;
+
+      const textarea = textareaRef.current;
+      if (!textarea || textarea.disabled || textarea.readOnly || !isVisibleTarget(textarea)) {
+        return;
+      }
+
+      setPendingFiles((prev) => [...prev, ...files]);
+      textarea.focus();
+    };
+
+    window.addEventListener(ATTACH_COMMENT_FILES_EVENT, handleAttachFiles as EventListener);
+    return () => {
+      window.removeEventListener(ATTACH_COMMENT_FILES_EVENT, handleAttachFiles as EventListener);
+    };
+  }, [hotkeyTarget]);
 
   const toggleRangeMode = () => {
     const next = !rangeMode;
@@ -258,7 +292,19 @@ export function CommentInput({
               : "mx-3 mb-2 border border-[#1a1a1a]/30 bg-[#e8e8e0] px-2 py-2"
           }
         >
-          <p className="text-[11px] font-mono text-[#666]">Annotation preview</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-mono text-[#666]">Annotation preview</p>
+            {onClearDrawing && (
+              <button
+                type="button"
+                className="inline-flex h-5 w-5 items-center justify-center border border-[#1a1a1a]/30 bg-[#f0f0e8] text-[#888] hover:text-[#dc2626]"
+                onClick={onClearDrawing}
+                title="Remove annotation"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
           <CommentDrawingThumbnail
             src={drawingData}
             alt="Pending annotation"

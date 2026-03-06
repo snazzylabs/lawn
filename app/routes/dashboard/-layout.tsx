@@ -92,6 +92,11 @@ export default function DashboardLayout() {
   const canUploadToCurrentProject = routeProjectId
     ? uploadableProjectIds.has(routeProjectId)
     : false;
+  const allowGlobalVideoUploadDrop = Boolean(
+    routeProjectId &&
+      !routeVideoId &&
+      (canUploadToCurrentProject || uploadTargets === undefined),
+  );
   const nextProofNumber = useQuery(
     api.videos.getNextProofNumber,
     uploadSetupProjectId ? { projectId: uploadSetupProjectId } : "skip",
@@ -197,6 +202,12 @@ export default function DashboardLayout() {
   }, [nextProofNumber, uploadDrafts, uploadFilesToProject, uploadSetupProjectId]);
 
   useEffect(() => {
+    if (!allowGlobalVideoUploadDrop) {
+      dragDepthRef.current = 0;
+      setIsGlobalDragActive(false);
+      return;
+    }
+
     const handleDragEnter = (event: DragEvent) => {
       if (!dragEventHasFiles(event)) return;
       event.preventDefault();
@@ -241,7 +252,7 @@ export default function DashboardLayout() {
       window.removeEventListener("dragleave", handleDragLeave);
       window.removeEventListener("drop", handleDrop);
     };
-  }, [requestUpload]);
+  }, [allowGlobalVideoUploadDrop, requestUpload]);
 
   const uploadContext = useMemo(
     () => ({
@@ -335,7 +346,7 @@ export default function DashboardLayout() {
         </DashboardUploadProvider>
       </main>
 
-      {isGlobalDragActive && (
+      {allowGlobalVideoUploadDrop && isGlobalDragActive && (
         <div className="pointer-events-none fixed inset-0 z-40">
           <div className="absolute inset-0 bg-[#1a1a1a]/20" />
           <div className="absolute inset-4 border-4 border-dashed border-[#2F6DB4] bg-[#2F6DB4]/10 flex items-center justify-center">

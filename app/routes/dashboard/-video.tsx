@@ -24,7 +24,12 @@ import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { resolveAttachmentContentType } from "@/lib/attachments";
-import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
+import {
+  ATTACH_COMMENT_FILES_EVENT,
+  OPEN_HELP_EVENT,
+  focusVisibleCommentInputSoon,
+  isTextEntryTarget,
+} from "@/lib/commentHotkeys";
 import {
   Edit2,
   Check,
@@ -85,6 +90,7 @@ export default function VideoPage() {
   const [highlightedCommentId, setHighlightedCommentId] = useState<Id<"comments"> | undefined>();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  const [showDiscussionForFinalCut, setShowDiscussionForFinalCut] = useState(false);
   const [isApprovingFinalCut, setIsApprovingFinalCut] = useState(false);
   const [playbackSession, setPlaybackSession] = useState<{
     url: string;
@@ -96,6 +102,7 @@ export default function VideoPage() {
   const [isLoadingOriginalPlayback, setIsLoadingOriginalPlayback] = useState(false);
   const [preferredSource, setPreferredSource] = useState<"mux720" | "original" | null>(null);
   const [rangeMarker, setRangeMarker] = useState<{ inTime: number; outTime: number } | null>(null);
+  const [pendingInPoint, setPendingInPoint] = useState<number | null>(null);
   const [editingMarker, setEditingMarker] = useState<{ timestampSeconds: number } | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<Id<"comments"> | null>(null);
   const [visibleCommentIds, setVisibleCommentIds] = useState<Set<string>>(new Set());
@@ -108,6 +115,43 @@ export default function VideoPage() {
   const currentTimeRef = useRef(0);
   const pendingInTimeRef = useRef<number | null>(null);
   const canComment = true;
+
+  useEffect(() => {
+    const dragEventHasFiles = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types ?? []).includes("Files");
+
+    const handleDragOver = (event: DragEvent) => {
+      if (!dragEventHasFiles(event)) return;
+      event.preventDefault();
+    };
+
+    const handleDrop = (event: DragEvent) => {
+      if (!dragEventHasFiles(event)) return;
+      event.preventDefault();
+
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (files.length === 0) return;
+
+      if (window.matchMedia("(max-width: 1023px)").matches) {
+        setMobileCommentsOpen(true);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(ATTACH_COMMENT_FILES_EVENT, {
+          detail: { files },
+        }),
+      );
+      focusVisibleCommentInputSoon();
+    };
+
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("drop", handleDrop);
+
+    return () => {
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, []);
 
   const timelineComments = useMemo(() => {
     if (!comments) return [];
@@ -130,6 +174,8 @@ export default function VideoPage() {
   const isUsingOriginalFallback = Boolean(activePlaybackUrl && activePlaybackUrl === originalPlaybackUrl && !playbackUrl);
   const shouldCanonicalize =
     !!context && !context.isCanonical && pathname !== context.canonicalPath;
+  const isFinalCutVideo = Boolean(video?.isFinalProof);
+  const isDiscussionVisible = !isFinalCutVideo || showDiscussionForFinalCut;
   const prewarmProjectIntentHandlers = useRoutePrewarmIntent(() => {
     if (!resolvedProjectId) return;
     return prewarmProject(convex, {
@@ -160,6 +206,12 @@ export default function VideoPage() {
         return;
       }
 
+      if (e.code === "Space" || e.key === " ") {
+        e.preventDefault();
+        playerRef.current?.togglePlay();
+        return;
+      }
+
       if (e.key === "?") {
         e.preventDefault();
         window.dispatchEvent(new Event(OPEN_HELP_EVENT));
@@ -170,6 +222,7 @@ export default function VideoPage() {
         e.preventDefault();
         const time = currentTimeRef.current;
         pendingInTimeRef.current = time;
+        setPendingInPoint(time);
         setRangeMarker(null);
         return;
       }
@@ -183,6 +236,7 @@ export default function VideoPage() {
           inTime: Math.min(start, outTime),
           outTime: Math.max(start, outTime),
         });
+        setPendingInPoint(null);
         pendingInTimeRef.current = null;
         focusVisibleCommentInputSoon();
       }
@@ -197,6 +251,17 @@ export default function VideoPage() {
       navigate({ to: context.canonicalPath, replace: true });
     }
   }, [shouldCanonicalize, context, navigate]);
+
+  useEffect(() => {
+    if (!isFinalCutVideo) {
+      setShowDiscussionForFinalCut(false);
+      setMobileCommentsOpen(false);
+      return;
+    }
+    if (!showDiscussionForFinalCut) {
+      setMobileCommentsOpen(false);
+    }
+  }, [isFinalCutVideo, showDiscussionForFinalCut, resolvedVideoId]);
 
   useEffect(() => {
     if (!resolvedVideoId || !isPlayable) {
@@ -293,7 +358,9 @@ export default function VideoPage() {
       const rawDrawing = canvas.toDataURL();
       if (!rawDrawing) return null;
 
-      const frame = playerRef.current?.captureFrame() ?? null;
+      const frame = playerRef.current
+        ? await playerRef.current.captureFrameWithFallback()
+        : null;
       if (!frame) return rawDrawing;
 
       try {
@@ -357,6 +424,15 @@ export default function VideoPage() {
 
       setDrawingData(null);
       setDrawingMode(false);
+      setRangeMarker(null);
+      setPendingInPoint(null);
+      pendingInTimeRef.current = null;
+
+      const activeElement = document.activeElement;
+      if (isTextEntryTarget(activeElement) && activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+      playerRef.current?.play();
     },
     [
       createAttachment,
@@ -378,10 +454,14 @@ export default function VideoPage() {
           setEditingMarker({ timestampSeconds: editing.timestamp });
           setRangeMarker(null);
         }
+        setPendingInPoint(null);
+        pendingInTimeRef.current = null;
       } else {
         setEditingCommentId(null);
         setEditingMarker(null);
         setRangeMarker(null);
+        setPendingInPoint(null);
+        pendingInTimeRef.current = null;
       }
     },
     [],
@@ -530,17 +610,19 @@ export default function VideoPage() {
             <LinkIcon className="mr-1.5 h-4 w-4" />
             Share
           </Button>
-          <HelpButton />
-          <Button
-            variant="outline"
-            className="lg:hidden"
-            onClick={() => setMobileCommentsOpen(true)}
-          >
-            <MessageSquare className="h-4 w-4" />
-            {comments && comments.length > 0 && (
-              <span className="ml-1 text-xs">{comments.length}</span>
-            )}
-          </Button>
+          <HelpButton variant="outline" className="h-9 w-9" />
+          {isDiscussionVisible && (
+            <Button
+              variant="outline"
+              className="lg:hidden"
+              onClick={() => setMobileCommentsOpen(true)}
+            >
+              <MessageSquare className="h-4 w-4" />
+              {comments && comments.length > 0 && (
+                <span className="ml-1 text-xs">{comments.length}</span>
+              )}
+            </Button>
+          )}
         </div>
 
         {/* Mobile: workflow status + menu button */}
@@ -553,7 +635,7 @@ export default function VideoPage() {
               void handleUpdateWorkflowStatus(workflowStatus);
             }}
           />
-          <HelpButton />
+          <HelpButton variant="outline" className="h-9 w-9" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8">
@@ -565,10 +647,12 @@ export default function VideoPage() {
               <LinkIcon className="mr-2 h-4 w-4" />
               Share
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setMobileCommentsOpen(true)}>
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Comments{comments && comments.length > 0 ? ` (${comments.length})` : ""}
-            </DropdownMenuItem>
+            {isDiscussionVisible && (
+              <DropdownMenuItem onSelect={() => setMobileCommentsOpen(true)}>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Comments{comments && comments.length > 0 ? ` (${comments.length})` : ""}
+              </DropdownMenuItem>
+            )}
             {comments && comments.length > 0 && (
               <>
                 <DropdownMenuItem onSelect={() => downloadFCPXML(comments, video?.title ?? "video")}>
@@ -591,32 +675,43 @@ export default function VideoPage() {
       </DashboardHeader>
 
       {video.isFinalProof && (
-        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-4 py-3 sm:px-6">
+        <div className="border-b border-amber-700/35 bg-amber-100 text-amber-950 dark:border-amber-300/30 dark:bg-amber-900/30 dark:text-amber-100 px-4 py-3 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-900 dark:text-amber-100">
                 Final Proof
               </p>
-              <p className="text-sm text-[#1a1a1a]">
+              <p className="text-sm text-amber-900/90 dark:text-amber-100/90">
                 {video.finalCutApprovedAt
                   ? `Approved by ${video.finalCutApprovedByName ?? "team"} and ready for publishing.`
-                  : "Final cut is ready. Approve to notify team for publishing."}
+                  : "We hope you like our changes! Approve to notify team for publishing."}
               </p>
             </div>
-            {video.finalCutApprovedAt ? (
-              <span className="inline-flex items-center gap-2 border-2 border-[#1a1a1a] bg-[#22c55e] px-3 py-2 text-sm font-black uppercase tracking-wide text-white">
-                <CheckCircle2 className="h-4 w-4" />
-                Final Cut Approved
-              </span>
-            ) : (
-              <Button
-                onClick={() => void handleApproveFinalCut()}
-                disabled={isApprovingFinalCut}
-                className="h-11 border-2 border-[#1a1a1a] bg-[#16a34a] px-5 text-sm font-black uppercase tracking-wide text-white shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:bg-[#15803d]"
-              >
-                {isApprovingFinalCut ? "Approving..." : "Approve Final Cut"}
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {!isDiscussionVisible && (
+                <Button
+                  variant="outline"
+                  className="h-11 border border-amber-900/35 bg-white/85 px-5 text-sm font-black uppercase tracking-wide text-amber-900 hover:bg-white dark:border-amber-200/35 dark:bg-black/25 dark:text-amber-100 dark:hover:bg-black/35"
+                  onClick={() => setShowDiscussionForFinalCut(true)}
+                >
+                  Edits Required
+                </Button>
+              )}
+              {video.finalCutApprovedAt ? (
+                <span className="inline-flex items-center gap-2 border border-emerald-200/50 bg-emerald-600 px-3 py-2 text-sm font-black uppercase tracking-wide text-white">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Final Cut Approved
+                </span>
+              ) : (
+                <Button
+                  onClick={() => void handleApproveFinalCut()}
+                  disabled={isApprovingFinalCut}
+                  className="h-11 border border-emerald-200/50 bg-emerald-600 px-5 text-sm font-black uppercase tracking-wide text-white shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:bg-emerald-500"
+                >
+                  {isApprovingFinalCut ? "Approving..." : "Approve Final Cut"}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -626,10 +721,10 @@ export default function VideoPage() {
         {/* Video player area — full black, Frame.io style */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black">
           {video.status === "processing" && isUsingOriginalFallback && activePlaybackUrl ? (
-            <div className="flex-shrink-0 flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 text-sm text-white">
+            <div className="flex-shrink-0 flex items-center gap-2 border-b border-zinc-700/70 bg-zinc-900/95 px-4 py-2 text-sm text-zinc-100">
               <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-[#2F6DB4]" />
               <span className="font-semibold">Original playback active.</span>
-              <span className="text-white/60">Transcoded stream is still encoding.</span>
+              <span className="text-zinc-300">Transcoded stream is still encoding.</span>
             </div>
           ) : null}
 
@@ -652,6 +747,7 @@ export default function VideoPage() {
                   setEditingMarker({ timestampSeconds: time });
                 }}
                 rangeMarker={rangeMarker ?? undefined}
+                pendingInPoint={pendingInPoint ?? undefined}
                 onRangeMarkerDrag={(handle, time) => {
                   setRangeMarker((prev) => prev ? {
                     inTime: handle === "in" ? time : prev.inTime,
@@ -741,55 +837,58 @@ export default function VideoPage() {
         </div>
 
         {/* Comments sidebar — desktop */}
-        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
-          <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 dark:border-white/10 flex items-center justify-between">
-            <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a] dark:text-[#f0f0e8]">
-              Discussion
-            </h2>
-            {comments && comments.length > 0 && (
-              <span className="text-[11px] font-medium text-[#888] bg-[#1a1a1a]/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
-                {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <CommentList
-              videoId={resolvedVideoId}
-              comments={commentsThreaded}
-              currentUserClerkId={context?.userSubject}
-              onTimestampClick={handleTimestampClick}
-              onEditingChange={handleEditingChange}
-              externalEditTimestamp={editingMarker?.timestampSeconds ?? null}
-              externalEditRange={editingCommentId ? rangeMarker : null}
-              highlightedCommentId={highlightedCommentId}
-              canResolve={canEdit}
-              onVisibleIdsChange={setVisibleCommentIds}
-              currentUserIdentifier={context?.userSubject}
-              currentUserName={video?.uploaderName}
-              onSubmitComment={handleSubmitComment}
-            />
-          </div>
-          {canComment && (
-            <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8]">
-              <CommentInput
+        {isDiscussionVisible && (
+          <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
+            <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 dark:border-white/10 flex items-center justify-between">
+              <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a] dark:text-[#f0f0e8]">
+                Discussion
+              </h2>
+              {comments && comments.length > 0 && (
+                <span className="text-[11px] font-medium text-[#888] bg-[#1a1a1a]/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                  {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <CommentList
                 videoId={resolvedVideoId}
-                timestampSeconds={currentTime}
-                showTimestamp
-                variant="seamless"
-                hotkeyTarget
+                comments={commentsThreaded}
+                currentUserClerkId={context?.userSubject}
+                onTimestampClick={handleTimestampClick}
+                onEditingChange={handleEditingChange}
+                externalEditTimestamp={editingMarker?.timestampSeconds ?? null}
+                externalEditRange={editingCommentId ? rangeMarker : null}
+                highlightedCommentId={highlightedCommentId}
+                canResolve={canEdit}
+                onVisibleIdsChange={setVisibleCommentIds}
+                currentUserIdentifier={context?.userSubject}
+                currentUserName={video?.uploaderName}
                 onSubmitComment={handleSubmitComment}
-                onRangeChange={editingCommentId ? undefined : setRangeMarker}
-                externalRange={editingCommentId ? null : rangeMarker}
-                onDrawingRequest={() => setDrawingMode(true)}
-                drawingData={drawingData}
               />
             </div>
-          )}
-        </aside>
+            {canComment && (
+              <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8]">
+                <CommentInput
+                  videoId={resolvedVideoId}
+                  timestampSeconds={currentTime}
+                  showTimestamp
+                  variant="seamless"
+                  hotkeyTarget
+                  onSubmitComment={handleSubmitComment}
+                  onRangeChange={editingCommentId ? undefined : setRangeMarker}
+                  externalRange={editingCommentId ? null : rangeMarker}
+                  onDrawingRequest={() => setDrawingMode(true)}
+                  onClearDrawing={() => setDrawingData(null)}
+                  drawingData={drawingData}
+                />
+              </div>
+            )}
+          </aside>
+        )}
       </div>
 
       {/* Comments overlay — mobile */}
-      {mobileCommentsOpen && (
+      {isDiscussionVisible && mobileCommentsOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-[#f0f0e8]">
           <div className="flex-shrink-0 px-5 py-4 border-b-2 border-[#1a1a1a] flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a]">
@@ -841,6 +940,7 @@ export default function VideoPage() {
                 onRangeChange={editingCommentId ? undefined : setRangeMarker}
                 externalRange={editingCommentId ? null : rangeMarker}
                 onDrawingRequest={() => setDrawingMode(true)}
+                onClearDrawing={() => setDrawingData(null)}
                 drawingData={drawingData}
               />
             </div>

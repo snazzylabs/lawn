@@ -1,4 +1,5 @@
 export const OPEN_HELP_EVENT = "snazzy:open-help";
+export const ATTACH_COMMENT_FILES_EVENT = "snazzy:attach-comment-files";
 
 export function isTextEntryTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
