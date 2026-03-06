@@ -41,6 +41,16 @@ Snazzy Labs' internal and client-facing video proofing app, built on top of [Jak
 - Local setup: [docs/setup.md](docs/setup.md)
 - Deployment notes: [docs/deployment.md](docs/deployment.md)
 
+## Forkability and Upstream Portability
+
+- This repository is MIT-licensed, so others can legally fork and reuse code with license notice preservation.
+- Features are intentionally implemented in discrete modules (Convex functions + UI components) to make cherry-picking straightforward.
+- If you want to port features upstream:
+  - Prefer copying isolated files and corresponding schema/function changes together
+  - Keep feature flags and environment-variable requirements explicit
+  - Preserve attribution links to both [Jakkuh's fork](https://github.com/jakkuh/lawn) and [Theo/Ping's original](https://github.com/pingdotgg/lawn)
+- See [CONTRIBUTING.md](./CONTRIBUTING.md) for practical extraction and implementation notes.
+
 ## Attribution
 
 See [ATTRIBUTION.md](./ATTRIBUTION.md). This project builds on [Jakkuh's fork](https://github.com/jakkuh/lawn) of [Theo/Ping's original Lawn](https://github.com/pingdotgg/lawn), MIT-licensed by Ping Labs.

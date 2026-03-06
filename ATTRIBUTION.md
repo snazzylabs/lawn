@@ -1,7 +1,7 @@
 # Attribution
 
-This project is built on top of [Lawn](https://github.com/jakkuh/lawn), an open-source video review platform created by [Theo Browne](https://github.com/jakkuh) / [Ping Labs](https://ping.gg).
+This project is built on top of [Jakkuh's Lawn fork](https://github.com/jakkuh/lawn), which is based on [Theo/Ping's original Lawn repository](https://github.com/pingdotgg/lawn).
 
-Lawn is licensed under the [MIT License](./LICENSE). The original copyright notice is preserved in the LICENSE file as required.
+Lawn is licensed under the [MIT License](./LICENSE). This repository keeps MIT licensing in place so downstream users can fork, reuse, and adapt the code with attribution and license notice preservation.
 
 We are grateful for the foundation Lawn provides and encourage you to check out the original project.
