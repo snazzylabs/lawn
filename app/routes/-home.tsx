@@ -23,7 +23,9 @@ export default function Homepage() {
         <p className="text-[11px] uppercase tracking-[0.25em] text-[#6b7280]">
           Restricted Access
         </p>
-        <h1 className="mt-3 text-xl font-semibold text-[#111827]">Workspace</h1>
+        <h1 className="mt-3 text-xl font-semibold text-[#111827]">
+          Snazzy Labs Proofing Tool
+        </h1>
         <p className="mt-3 text-sm text-[#6b7280]">
           OAuth login for Snazzy Labs team members only.
         </p>
