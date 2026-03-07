@@ -442,14 +442,14 @@ export default function ProjectPage({
           isLoadingData ? "opacity-0" : "opacity-100"
         )}>
           {/* View toggle */}
-          <div className="flex h-10 items-stretch border-2 border-[#1a1a1a] p-0.5">
+          <div className="flex h-10 items-stretch border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] p-0.5 shadow-[4px_4px_0px_0px_var(--shadow-accent)]">
             <button
               onClick={() => setViewMode("grid")}
               className={cn(
-                "inline-flex h-full w-10 items-center justify-center transition-colors",
+                "inline-flex h-full w-10 items-center justify-center border border-transparent transition-colors",
                 viewMode === "grid"
-                  ? "bg-[#1a1a1a] text-[#f0f0e8]"
-                  : "text-[#888] hover:text-[#1a1a1a]",
+                  ? "bg-[color:var(--button-fill-hover)] text-[color:var(--accent)] border-[color:var(--button-border)]"
+                  : "text-[color:var(--foreground-muted)] hover:text-[color:var(--button-text)]",
               )}
             >
               <Grid3X3 className="h-4 w-4" />
@@ -457,10 +457,10 @@ export default function ProjectPage({
             <button
               onClick={() => setViewMode("list")}
               className={cn(
-                "inline-flex h-full w-10 items-center justify-center transition-colors",
+                "inline-flex h-full w-10 items-center justify-center border border-transparent transition-colors",
                 viewMode === "list"
-                  ? "bg-[#1a1a1a] text-[#f0f0e8]"
-                  : "text-[#888] hover:text-[#1a1a1a]",
+                  ? "bg-[color:var(--button-fill-hover)] text-[color:var(--accent)] border-[color:var(--button-border)]"
+                  : "text-[color:var(--foreground-muted)] hover:text-[color:var(--button-text)]",
               )}
             >
               <LayoutList className="h-4 w-4" />
