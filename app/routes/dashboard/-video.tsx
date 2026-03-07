@@ -707,7 +707,7 @@ export default function VideoPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <HelpButton variant="outline" className="h-10 w-10" />
+          <HelpButton chrome="toolbarIcon" />
           {isDiscussionVisible && (
             <Button
               variant="outline"
@@ -732,7 +732,7 @@ export default function VideoPage() {
               void handleUpdateWorkflowStatus(workflowStatus);
             }}
           />
-          <HelpButton variant="outline" className="h-10 w-10" />
+          <HelpButton chrome="toolbarIcon" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-10 w-10">

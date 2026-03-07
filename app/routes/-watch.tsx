@@ -872,45 +872,49 @@ export default function WatchPage() {
               )}
             </div>
           )}
-          <PublicThemeToggleButton />
-          <HelpButton variant="outline" className="h-10 w-10" />
           {canComment && (
-            <Button
-              size="sm"
-              className={cn(
-                "h-10 px-4",
-                isSubmitReviewFlashing && !reviewSubmitted && "animate-pulse ring-2 ring-[color:var(--accent)] ring-offset-2 ring-offset-[color:var(--background)]",
-              )}
-              disabled={reviewSubmitted}
-              onClick={async () => {
-                if (!video?._id) return;
-                try {
-                  await submitReview({
-                    videoId: video._id as Id<"videos">,
-                    submittedByName: guest?.name ?? "User",
-                    submittedByCompany: guest?.company,
-                    guestSessionId: guest?.guestId,
-                    userClerkId: userId ?? undefined,
-                  });
-                  setReviewSubmitted(true);
-                } catch (e) {
-                  console.error("Failed to submit review:", e);
-                }
-              }}
-            >
-              {reviewSubmitted ? (
-                <>
-                  <span className="hidden lg:inline">Review Submitted ✓</span>
-                  <span className="lg:hidden">Submitted ✓</span>
-                </>
-              ) : (
-                <>
-                  <span className="hidden lg:inline">Submit Review</span>
-                  <span className="lg:hidden">Submit</span>
-                </>
-              )}
-            </Button>
+            <>
+              {guest && !userId ? <div className="h-4 w-px bg-[#1a1a1a]/20" /> : null}
+              <Button
+                size="sm"
+                className={cn(
+                  "h-10 px-4",
+                  isSubmitReviewFlashing && !reviewSubmitted && "animate-pulse ring-2 ring-[color:var(--accent)] ring-offset-2 ring-offset-[color:var(--background)]",
+                )}
+                disabled={reviewSubmitted}
+                onClick={async () => {
+                  if (!video?._id) return;
+                  try {
+                    await submitReview({
+                      videoId: video._id as Id<"videos">,
+                      submittedByName: guest?.name ?? "User",
+                      submittedByCompany: guest?.company,
+                      guestSessionId: guest?.guestId,
+                      userClerkId: userId ?? undefined,
+                    });
+                    setReviewSubmitted(true);
+                  } catch (e) {
+                    console.error("Failed to submit review:", e);
+                  }
+                }}
+              >
+                {reviewSubmitted ? (
+                  <>
+                    <span className="hidden lg:inline">Review Submitted ✓</span>
+                    <span className="lg:hidden">Submitted ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="hidden lg:inline">Submit Review</span>
+                    <span className="lg:hidden">Submit</span>
+                  </>
+                )}
+              </Button>
+              <div className="h-4 w-px bg-[#1a1a1a]/20" />
+            </>
           )}
+          <HelpButton chrome="toolbarIcon" />
+          <PublicThemeToggleButton />
           <Button
             variant="outline"
             size="sm"

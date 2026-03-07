@@ -39,11 +39,13 @@ const TOOLS = [
 type HelpButtonProps = {
   className?: string;
   variant?: "ghost" | "outline";
+  chrome?: "button" | "toolbarIcon";
 };
 
 export function HelpButton({
   className,
   variant = "ghost",
+  chrome = "button",
 }: HelpButtonProps) {
   const [open, setOpen] = useState(false);
 
@@ -55,15 +57,30 @@ export function HelpButton({
 
   return (
     <>
-      <Button
-        variant={variant}
-        size="icon"
-        className={cn("h-8 w-8", className)}
-        onClick={() => setOpen(true)}
-        title="Help & shortcuts"
-      >
-        <HelpCircle className="h-4 w-4" />
-      </Button>
+      {chrome === "toolbarIcon" ? (
+        <button
+          type="button"
+          className={cn(
+            "h-8 w-8 flex items-center justify-center text-[#888] hover:text-[#1a1a1a] hover:bg-[#e8e8e0] transition-colors",
+            className,
+          )}
+          onClick={() => setOpen(true)}
+          title="Help & shortcuts"
+          aria-label="Help & shortcuts"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </button>
+      ) : (
+        <Button
+          variant={variant}
+          size="icon"
+          className={cn("h-8 w-8", className)}
+          onClick={() => setOpen(true)}
+          title="Help & shortcuts"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[min(96vw,980px)] max-w-[980px] max-h-[85vh] overflow-hidden">
