@@ -2,51 +2,31 @@
 
 Snazzy Labs' internal and client-facing video proofing app, built on top of [Jakkuh's fork of Lawn](https://github.com/jakkuh/lawn), which is based on [Theo/Ping's original Lawn](https://github.com/pingdotgg/lawn).
 
-## Current Product Scope
+## Snazzy Fork Additions (Not in Theo/Jakkuh Base)
 
-- Team/admin dashboard for projects, uploads, sharing, and review workflow
-- Public/share review pages for clients without mandatory account creation
-- Timestamped comments with optional in/out ranges and drawing annotations
-- Threaded replies, emoji reactions, and file attachments on comments
-- Final Proof workflow with explicit final-cut approval state
-- Project-level and video-level restricted share links
-- Team notifications for review activity (comments, replies, reactions, submissions, approvals)
+- Final Proof flow:
+  - Per-video `Final Proof` flag
+  - Prominent `Approve Final Cut` action for client and admin
+  - Team notification when final cut is approved
 - Notion integration:
-  - Link a project to a Notion page from the project dashboard
-  - Post throttled client-comment alerts to that Notion page
-
-## Recent Updates
-
-- New-comment hotkey (`N`) now locks timestamp at keypress and shows a pending timeline marker
-- Viewer hotkeys expanded:
-  - `M` enters mark mode and pauses playback
-  - `J`/`L` adjust speed by `0.25x`
-  - `K` resets speed to `1x`
-  - `R` resolves selected comments (team/admin), with `↑`/`↓` keyboard navigation
-- Markup UX polish:
-  - "Draw annotation" terminology updated to "Mark"
-  - Pending mark preview and removable mark thumbnail in composer
-- Public/share comments automatically set video workflow status to `Rework`
-- Drag-and-drop in viewer now shows an explicit "Drop file here to attach" affordance and attaches directly to draft comments
-- Final Proof banner styling and readability improved for dark mode
-- Notion link modal is now responsive to viewport size and no longer overflows on smaller windows
-- Notion link add/remove notifications were repositioned to avoid overlapping action buttons
-- Notion "Proof" field sync now supports property names beyond exact `"Proof?"` (e.g., `"Proof"`)
-
-## Infrastructure and Backend
-
-- Convex backend (queries, mutations, actions, internal cron jobs)
-- Clerk authentication for team/admin access
-- S3-compatible object storage (Cloudflare R2 compatible)
-- Self-hosted transcoder support (plus Mux-compatible playback paths)
-- snazzy.fm short-link integration for share links
-
-## Data Lifecycle and Cleanup
-
-- Stale multipart uploads are automatically aborted by cron
-- Project/video deletion cascades clean up related comment attachments in object storage
-- Inactive project auto-purge support (scheduled)
-- Team-facing manual "Purge old projects" control with selectable time window
+  - Link/unlink Notion page per project from dashboard UI
+  - Search Notion pages in-app before linking
+  - Sync project URL into Notion `Proof` property
+  - Throttled client-comment pings to Notion page
+- snazzy.fm short-link integration for generated share URLs
+- Expanded review input system:
+  - Markup-on-frame (`Mark`) with preview thumbnail attached to comments
+  - Comment file attachments (including drag/drop attach in viewer)
+  - Range comments with timeline handles and keyboard-first in/out workflow
+- Keyboard and review-ops enhancements:
+  - Locked timestamp on `N` (comment time captured at hotkey press)
+  - Playback hotkeys (`J`/`K`/`L`), mark hotkey (`M`)
+  - Comment list keyboard navigation (`↑`/`↓`) and resolve hotkey (`R`)
+- Team engagement notification coverage for review events (comments/replies/reactions/submissions)
+- Storage lifecycle additions:
+  - Multipart upload cleanup job
+  - Attachment/blob cleanup on project deletion
+  - Inactive project purge support with configurable window
 
 ## Security and Secrets
 
