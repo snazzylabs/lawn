@@ -748,7 +748,12 @@ export const getReactionsForVideo = query({
       .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
       .collect();
 
-    const result: Record<string, Array<{ emoji: string; count: number; userIdentifiers: string[] }>> = {};
+    const result: Record<string, Array<{
+      emoji: string;
+      count: number;
+      userIdentifiers: string[];
+      userNames: string[];
+    }>> = {};
 
     for (const comment of comments) {
       const reactions = await ctx.db
@@ -758,17 +763,29 @@ export const getReactionsForVideo = query({
 
       if (reactions.length === 0) continue;
 
-      const grouped: Record<string, string[]> = {};
+      const grouped: Record<string, Array<{ userIdentifier: string; userName: string }>> = {};
       for (const r of reactions) {
         if (!grouped[r.emoji]) grouped[r.emoji] = [];
-        grouped[r.emoji].push(r.userIdentifier);
+        grouped[r.emoji].push({
+          userIdentifier: r.userIdentifier,
+          userName: r.userName,
+        });
       }
 
-      result[comment._id] = Object.entries(grouped).map(([emoji, userIds]) => ({
-        emoji,
-        count: userIds.length,
-        userIdentifiers: userIds,
-      }));
+      result[comment._id] = Object.entries(grouped).map(([emoji, users]) => {
+        const seen = new Set<string>();
+        const uniqueUsers = users.filter((user) => {
+          if (seen.has(user.userIdentifier)) return false;
+          seen.add(user.userIdentifier);
+          return true;
+        });
+        return {
+          emoji,
+          count: uniqueUsers.length,
+          userIdentifiers: uniqueUsers.map((user) => user.userIdentifier),
+          userNames: uniqueUsers.map((user) => user.userName),
+        };
+      });
     }
 
     return result;

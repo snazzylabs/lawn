@@ -55,7 +55,12 @@ interface CommentItemProps {
   isHighlighted?: boolean;
   isReply?: boolean;
   canResolve?: boolean;
-  reactions?: Array<{ emoji: string; count: number; userIdentifiers: string[] }>;
+  reactions?: Array<{
+    emoji: string;
+    count: number;
+    userIdentifiers: string[];
+    userNames?: string[];
+  }>;
   currentUserIdentifier?: string;
   currentUserName?: string;
   onSubmitComment?: (args: {

@@ -67,6 +67,8 @@ type NotionSearchResult = {
   title: string;
   url: string;
   lastEditedTime?: string;
+  pageTitle?: string;
+  matchedBy?: "title" | "sponsor";
 };
 
 async function copyTextToClipboard(text: string) {
@@ -440,11 +442,11 @@ export default function ProjectPage({
           isLoadingData ? "opacity-0" : "opacity-100"
         )}>
           {/* View toggle */}
-          <div className="flex items-center border-2 border-[#1a1a1a] p-0.5">
+          <div className="flex h-10 items-stretch border-2 border-[#1a1a1a] p-0.5">
             <button
               onClick={() => setViewMode("grid")}
               className={cn(
-                "p-1.5 transition-colors",
+                "inline-flex h-full w-10 items-center justify-center transition-colors",
                 viewMode === "grid"
                   ? "bg-[#1a1a1a] text-[#f0f0e8]"
                   : "text-[#888] hover:text-[#1a1a1a]",
@@ -455,7 +457,7 @@ export default function ProjectPage({
             <button
               onClick={() => setViewMode("list")}
               className={cn(
-                "p-1.5 transition-colors",
+                "inline-flex h-full w-10 items-center justify-center transition-colors",
                 viewMode === "list"
                   ? "bg-[#1a1a1a] text-[#f0f0e8]"
                   : "text-[#888] hover:text-[#1a1a1a]",
@@ -485,7 +487,7 @@ export default function ProjectPage({
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-9 w-9"
+                    className="h-10 w-10"
                     disabled={isSavingNotionLink}
                     onClick={() => void handleClearNotionLink()}
                     title="Remove Notion link"
@@ -862,7 +864,7 @@ export default function ProjectPage({
           <DialogHeader>
             <DialogTitle>Link Notion page</DialogTitle>
             <DialogDescription>
-              Search your Notion pages or paste a page URL/ID.
+              Search your Notion pages by title or sponsor, or paste a page URL/ID.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 min-h-0">
@@ -879,7 +881,7 @@ export default function ProjectPage({
                     value={notionSearchQuery}
                     onChange={(event) => setNotionSearchQuery(event.target.value)}
                     className="pl-8"
-                    placeholder="Search Notion pages..."
+                    placeholder="Search title or sponsor..."
                     autoFocus
                   />
                 </div>
@@ -915,6 +917,11 @@ export default function ProjectPage({
                         <p className="truncate text-sm font-bold text-[#1a1a1a]">
                           {result.title}
                         </p>
+                        {result.pageTitle && result.pageTitle !== result.title ? (
+                          <p className="truncate text-[11px] text-[#666]">
+                            Page: {result.pageTitle}
+                          </p>
+                        ) : null}
                         <p className="truncate text-xs text-[#888]">{result.url}</p>
                         {!Number.isNaN(editedAt) ? (
                           <p className="text-[10px] text-[#888]">

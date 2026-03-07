@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +11,12 @@ const PRESET_EMOJIS = ["👍", "✅", "🔥", "👀", "❓"];
 
 interface EmojiReactionPickerProps {
   commentId: Id<"comments">;
-  reactions?: Array<{ emoji: string; count: number; userIdentifiers: string[] }>;
+  reactions?: Array<{
+    emoji: string;
+    count: number;
+    userIdentifiers: string[];
+    userNames?: string[];
+  }>;
   currentUserIdentifier: string;
   currentUserName: string;
 }
@@ -39,6 +43,19 @@ export function EmojiReactionPicker({
     setShowPicker(false);
   };
 
+  const reactionLabel = (reaction: {
+    count: number;
+    userNames?: string[];
+  }) => {
+    const names = (reaction.userNames ?? [])
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0);
+    if (names.length === 0) {
+      return reaction.count === 1 ? "1 reaction" : `${reaction.count} reactions`;
+    }
+    return names.join(", ");
+  };
+
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {reactions.map((reaction) => {
@@ -54,6 +71,7 @@ export function EmojiReactionPicker({
                 ? "border-[#2F6DB4] bg-[#2F6DB4]/10 text-[#2F6DB4]"
                 : "border-[#ccc] bg-[#f0f0e8] text-[#1a1a1a] hover:border-[#1a1a1a]",
             )}
+            title={reactionLabel(reaction)}
           >
             <span>{reaction.emoji}</span>
             <span className="font-mono font-bold">{reaction.count}</span>

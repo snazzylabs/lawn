@@ -23,7 +23,7 @@ import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
 import { CommentAttachments } from "@/components/comments/CommentAttachments";
 import { CommentDrawingThumbnail } from "@/components/comments/CommentDrawingThumbnail";
 import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
-import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
+import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compositeDrawing";
 import { resolveAttachmentContentType } from "@/lib/attachments";
 import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
 import { useShareData } from "./-share.data";
@@ -31,7 +31,7 @@ import { useShareData } from "./-share.data";
 export default function SharePage() {
   const params = useParams({ strict: false });
   const token = params.token as string;
-  const { isLoaded: isUserLoaded, id: userId } = useCurrentUser();
+  const { isLoaded: isUserLoaded, id: userId, name: signedInUserName } = useCurrentUser();
 
   const { guest, setGuestIdentity, isReady: isGuestReady } = useGuestIdentity();
   const canComment = Boolean(userId || guest);
@@ -295,7 +295,9 @@ export default function SharePage() {
   const createAttachmentMut = useMutation(api.comments.createAttachment);
   const prepareDrawingForComment = useCallback(
     async (draft?: string | null) => {
-      if (draft) return draft;
+      if (draft) {
+        return await optimizeCommentDrawingData(draft);
+      }
       const canvas = drawingCanvasRef.current;
       if (!canvas || canvas.getStrokes().length === 0) return drawingData;
 
@@ -305,12 +307,14 @@ export default function SharePage() {
       const frame = playerRef.current
         ? await playerRef.current.captureFrameWithFallback()
         : null;
-      if (!frame) return rawDrawing;
+      if (!frame) {
+        return await optimizeCommentDrawingData(rawDrawing);
+      }
 
       try {
         return await compositeDrawingOnFrame(frame, rawDrawing);
       } catch {
-        return rawDrawing;
+        return await optimizeCommentDrawingData(rawDrawing);
       }
     },
     [drawingData],
@@ -532,7 +536,7 @@ export default function SharePage() {
 
   const video = videoData.video;
   const userIdentifier = userId ?? guest?.guestId ?? "";
-  const userName = userId ? "You" : (guest?.name ?? "");
+  const userName = userId ? (signedInUserName ?? "Team Member") : (guest?.name ?? "");
 
   const renderComment = (
     comment: {

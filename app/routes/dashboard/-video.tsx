@@ -18,12 +18,13 @@ import {
   type VideoWorkflowStatus,
 } from "@/components/videos/VideoWorkflowStatusControl";
 import { formatDuration } from "@/lib/utils";
-import { compositeDrawingOnFrame } from "@/lib/compositeDrawing";
+import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compositeDrawing";
 import { downloadFCPXML, downloadPremiereCSV, downloadDaVinciEDL } from "@/lib/nleExport";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { resolveAttachmentContentType } from "@/lib/attachments";
+import { useCurrentUser } from "@/lib/auth";
 import {
   ATTACH_COMMENT_FILES_EVENT,
   OPEN_HELP_EVENT,
@@ -56,6 +57,7 @@ export default function VideoPage() {
   const params = useParams({ strict: false });
   const navigate = useNavigate({});
   const pathname = useLocation().pathname;
+  const { name: currentUserName } = useCurrentUser();
   const teamSlug = typeof params.teamSlug === "string" ? params.teamSlug : "";
   const projectId = params.projectId as Id<"projects">;
   const videoId = params.videoId as Id<"videos">;
@@ -424,7 +426,9 @@ export default function VideoPage() {
 
   const prepareDrawingForComment = useCallback(
     async (draft?: string | null) => {
-      if (draft) return draft;
+      if (draft) {
+        return await optimizeCommentDrawingData(draft);
+      }
       const canvas = drawingCanvasRef.current;
       if (!canvas || canvas.getStrokes().length === 0) return drawingData;
 
@@ -434,12 +438,14 @@ export default function VideoPage() {
       const frame = playerRef.current
         ? await playerRef.current.captureFrameWithFallback()
         : null;
-      if (!frame) return rawDrawing;
+      if (!frame) {
+        return await optimizeCommentDrawingData(rawDrawing);
+      }
 
       try {
         return await compositeDrawingOnFrame(frame, rawDrawing);
       } catch {
-        return rawDrawing;
+        return await optimizeCommentDrawingData(rawDrawing);
       }
     },
     [drawingData],
@@ -946,7 +952,7 @@ export default function VideoPage() {
                 canResolve={canEdit}
                 onVisibleIdsChange={setVisibleCommentIds}
                 currentUserIdentifier={context?.userSubject}
-                currentUserName={video?.uploaderName}
+                currentUserName={currentUserName ?? "Team Member"}
                 onSubmitComment={handleSubmitComment}
               />
             </div>
@@ -1009,7 +1015,7 @@ export default function VideoPage() {
               canResolve={canEdit}
               onVisibleIdsChange={setVisibleCommentIds}
               currentUserIdentifier={context?.userSubject}
-              currentUserName={video?.uploaderName}
+              currentUserName={currentUserName ?? "Team Member"}
               onSubmitComment={handleSubmitComment}
             />
           </div>

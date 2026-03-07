@@ -8,6 +8,7 @@ import { Doc } from "./_generated/dataModel";
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 const DEFAULT_COMMENT_NOTIFY_COOLDOWN_MINUTES = 180;
+const DEFAULT_NOTION_MENTION_NAMES = ["benjamin carroll", "quinn nelson"];
 
 function getNotionApiKey() {
   return process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN ?? null;
@@ -44,6 +45,71 @@ function getMentionUserIds() {
   ])];
 }
 
+function normalizeMentionName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+async function resolveMentionUserIds(notionApiKey: string) {
+  const explicitUserIds = getMentionUserIds();
+  if (explicitUserIds.length > 0) {
+    return explicitUserIds;
+  }
+
+  const targetNames = new Set(DEFAULT_NOTION_MENTION_NAMES.map(normalizeMentionName));
+  const matched = new Map<string, string>();
+  let cursor: string | undefined;
+
+  for (let page = 0; page < 5; page += 1) {
+    const query = new URLSearchParams({ page_size: "100" });
+    if (cursor) query.set("start_cursor", cursor);
+
+    const response = await fetch(`${NOTION_API_BASE}/users?${query.toString()}`, {
+      method: "GET",
+      headers: notionHeaders(notionApiKey),
+    });
+    if (!response.ok) {
+      const responseText = await response.text();
+      console.error("Failed to fetch Notion users for mentions", {
+        status: response.status,
+        response: responseText,
+      });
+      return [];
+    }
+
+    const payload = (await response.json()) as {
+      results?: Array<Record<string, unknown>>;
+      has_more?: boolean;
+      next_cursor?: string | null;
+    };
+
+    for (const user of payload.results ?? []) {
+      const userId = typeof user.id === "string" ? user.id : null;
+      const userName = typeof user.name === "string" ? user.name : "";
+      if (!userId || !userName) continue;
+      const normalizedUserName = normalizeMentionName(userName);
+      if (!targetNames.has(normalizedUserName)) continue;
+      matched.set(normalizedUserName, userId);
+    }
+
+    if (matched.size >= targetNames.size) break;
+
+    const hasMore = payload.has_more === true;
+    const nextCursor =
+      typeof payload.next_cursor === "string" && payload.next_cursor.length > 0
+        ? payload.next_cursor
+        : undefined;
+    if (!hasMore || !nextCursor) break;
+    cursor = nextCursor;
+  }
+
+  return DEFAULT_NOTION_MENTION_NAMES
+    .map((name) => matched.get(normalizeMentionName(name)))
+    .filter((value): value is string => Boolean(value));
+}
+
 type NotionRichText =
   | { type: "text"; text: { content: string } }
   | { type: "mention"; mention: { type: "user"; user: { id: string } } };
@@ -59,6 +125,8 @@ type NotionSearchPageResult = {
   title: string;
   url: string;
   lastEditedTime?: string;
+  pageTitle?: string;
+  matchedBy?: "title" | "sponsor";
 };
 
 function notionHeaders(notionApiKey: string) {
@@ -145,6 +213,110 @@ function normalizePropertyName(value: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeSearchText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function extractRichTextContent(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((segment) => {
+      if (!segment || typeof segment !== "object") return "";
+      const plainText = (segment as Record<string, unknown>).plain_text;
+      return typeof plainText === "string" ? plainText : "";
+    })
+    .join("")
+    .trim();
+}
+
+function extractPropertyText(property: Record<string, unknown> | undefined): string {
+  if (!property) return "";
+  const type = typeof property.type === "string" ? property.type : "";
+  if (!type) return "";
+
+  const rawValue = property[type];
+  if (type === "title" || type === "rich_text") {
+    return extractRichTextContent(rawValue);
+  }
+
+  if (type === "select") {
+    if (!rawValue || typeof rawValue !== "object") return "";
+    const name = (rawValue as Record<string, unknown>).name;
+    return typeof name === "string" ? name.trim() : "";
+  }
+
+  if (type === "multi_select") {
+    if (!Array.isArray(rawValue)) return "";
+    return rawValue
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return "";
+        const name = (entry as Record<string, unknown>).name;
+        return typeof name === "string" ? name.trim() : "";
+      })
+      .filter((entry) => entry.length > 0)
+      .join(", ");
+  }
+
+  if (type === "url" || type === "email" || type === "phone_number") {
+    return typeof rawValue === "string" ? rawValue.trim() : "";
+  }
+
+  if (type === "number") {
+    return typeof rawValue === "number" ? String(rawValue) : "";
+  }
+
+  if (type === "formula" && rawValue && typeof rawValue === "object") {
+    const formula = rawValue as Record<string, unknown>;
+    if (typeof formula.string === "string") return formula.string.trim();
+    if (typeof formula.number === "number") return String(formula.number);
+    if (typeof formula.boolean === "boolean") return formula.boolean ? "true" : "false";
+  }
+
+  return "";
+}
+
+function extractPropertyByName(
+  properties: Record<string, unknown> | undefined,
+  propertyName: string,
+) {
+  if (!properties || typeof properties !== "object") return "";
+  const normalizedName = normalizePropertyName(propertyName);
+
+  for (const [name, value] of Object.entries(properties)) {
+    if (normalizePropertyName(name) !== normalizedName) continue;
+    if (!value || typeof value !== "object") return "";
+    return extractPropertyText(value as Record<string, unknown>);
+  }
+
+  return "";
+}
+
+function extractSponsorMatchTitle(sponsorText: string, query: string) {
+  const trimmedSponsor = sponsorText.trim();
+  if (!trimmedSponsor) return null;
+
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedSponsor = normalizeSearchText(trimmedSponsor);
+  if (!normalizedSponsor.includes(normalizedQuery)) {
+    return null;
+  }
+
+  const candidateSegments = trimmedSponsor
+    .split(/\n|,|;|\|/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  const exactSegment = candidateSegments.find((segment) =>
+    normalizeSearchText(segment).includes(normalizedQuery),
+  );
+
+  if (exactSegment) {
+    return exactSegment;
+  }
+
+  return trimmedSponsor;
+}
+
 function findProofProperty(
   properties: Record<string, NotionPageProperty>,
 ): { name: string; property: NotionPageProperty } | null {
@@ -166,6 +338,141 @@ function findProofProperty(
   return null;
 }
 
+function mergeSearchResults(
+  primary: NotionSearchPageResult[],
+  secondary: NotionSearchPageResult[],
+) {
+  const merged = new Map<string, NotionSearchPageResult>();
+
+  for (const entry of primary) {
+    merged.set(entry.pageId, entry);
+  }
+
+  for (const entry of secondary) {
+    const existing = merged.get(entry.pageId);
+    if (!existing) {
+      merged.set(entry.pageId, entry);
+      continue;
+    }
+    if (entry.matchedBy === "sponsor") {
+      merged.set(entry.pageId, {
+        ...existing,
+        ...entry,
+      });
+    }
+  }
+
+  return [...merged.values()].sort((a, b) => {
+    const aTime = a.lastEditedTime ? Date.parse(a.lastEditedTime) : Number.NaN;
+    const bTime = b.lastEditedTime ? Date.parse(b.lastEditedTime) : Number.NaN;
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+    if (Number.isNaN(aTime)) return 1;
+    if (Number.isNaN(bTime)) return -1;
+    return bTime - aTime;
+  });
+}
+
+async function queryNotionDatabaseLikeCollection(
+  notionApiKey: string,
+  normalizedDatabaseId: string,
+  pageSize: number,
+) {
+  const candidatePaths = [
+    `${NOTION_API_BASE}/databases/${normalizedDatabaseId}/query`,
+    `${NOTION_API_BASE}/data-sources/${normalizedDatabaseId}/query`,
+  ];
+
+  for (const path of candidatePaths) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: notionHeaders(notionApiKey),
+      body: JSON.stringify({
+        page_size: pageSize,
+      }),
+    });
+
+    if (response.ok) {
+      return {
+        ok: true as const,
+        payload: (await response.json()) as { results?: Array<Record<string, unknown>> },
+      };
+    }
+
+    const responseText = await response.text();
+    const canTryFallback = response.status === 404 || response.status === 400;
+    if (!canTryFallback) {
+      console.error("Failed to query Notion collection", {
+        status: response.status,
+        response: responseText,
+        path,
+      });
+      return {
+        ok: false as const,
+        reason: `notion_http_${response.status}`,
+      };
+    }
+  }
+
+  return {
+    ok: false as const,
+    reason: "notion_collection_query_failed",
+  };
+}
+
+async function searchPagesBySponsorField(
+  notionApiKey: string,
+  normalizedDatabaseId: string,
+  query: string,
+  pageSize: number,
+) {
+  const sponsorQuery = normalizeSearchText(query);
+  if (!sponsorQuery) return [] as NotionSearchPageResult[];
+
+  const response = await queryNotionDatabaseLikeCollection(
+    notionApiKey,
+    normalizedDatabaseId,
+    Math.min(50, Math.max(pageSize, 20)),
+  );
+  if (!response.ok) {
+    return [] as NotionSearchPageResult[];
+  }
+
+  const rawResults = response.payload.results ?? [];
+  const results: NotionSearchPageResult[] = [];
+
+  for (const item of rawResults) {
+    if (item.object !== "page") continue;
+    const pageId = typeof item.id === "string" ? item.id : null;
+    const url = typeof item.url === "string" ? item.url : null;
+    if (!pageId || !url) continue;
+
+    const pageTitle = extractNotionPageTitle(item);
+    const properties =
+      item.properties && typeof item.properties === "object"
+        ? (item.properties as Record<string, unknown>)
+        : undefined;
+    const sponsorText = extractPropertyByName(properties, "sponsor");
+    const sponsorMatchTitle = extractSponsorMatchTitle(sponsorText, query);
+    if (!sponsorMatchTitle) continue;
+
+    const lastEditedTime =
+      typeof item.last_edited_time === "string"
+        ? item.last_edited_time
+        : undefined;
+
+    results.push({
+      pageId,
+      title: sponsorMatchTitle,
+      url,
+      lastEditedTime,
+      pageTitle,
+      matchedBy: "sponsor",
+    });
+  }
+
+  return results;
+}
+
 export const searchPagesForProject = action({
   args: {
     projectId: v.id("projects"),
@@ -179,6 +486,8 @@ export const searchPagesForProject = action({
         title: v.string(),
         url: v.string(),
         lastEditedTime: v.optional(v.string()),
+        pageTitle: v.optional(v.string()),
+        matchedBy: v.optional(v.union(v.literal("title"), v.literal("sponsor"))),
       }),
     ),
     filteredToDatabase: v.boolean(),
@@ -273,11 +582,23 @@ export const searchPagesForProject = action({
           title: extractNotionPageTitle(item),
           url,
           lastEditedTime,
+          matchedBy: "title",
         });
       }
 
+      const sponsorResults = normalizedDatabaseId
+        ? await searchPagesBySponsorField(
+          notionApiKey,
+          normalizedDatabaseId,
+          trimmedQuery,
+          pageSize,
+        )
+        : [];
+
+      const mergedResults = mergeSearchResults(results, sponsorResults).slice(0, pageSize);
+
       return {
-        results,
+        results: mergedResults,
         filteredToDatabase: Boolean(normalizedDatabaseId),
       };
     } catch (error) {
@@ -342,7 +663,7 @@ export const notifyProjectClientComment = internalAction({
       return { ok: false, skipped: true, reason: "cooldown_active" };
     }
 
-    const mentionUserIds = getMentionUserIds();
+    const mentionUserIds = await resolveMentionUserIds(notionApiKey);
     const appBaseUrl = getAppBaseUrl();
     const deepLink =
       appBaseUrl && args.linkPath
