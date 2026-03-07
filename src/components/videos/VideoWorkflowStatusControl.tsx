@@ -20,7 +20,7 @@ export const VIDEO_WORKFLOW_STATUS_OPTIONS: Array<{
 }> = [
   { value: "review", label: "Review" },
   { value: "rework", label: "Rework" },
-  { value: "done", label: "Done" },
+  { value: "done", label: "Revised" },
 ];
 
 function workflowStatusLabel(status: VideoWorkflowStatus) {
@@ -66,11 +66,20 @@ export function VideoWorkflowStatusControl({
           type="button"
           disabled={disabled}
           className={cn(
-            "inline-flex items-center gap-1.5 font-bold uppercase tracking-wider transition-colors",
-            disabled
-              ? "cursor-not-allowed opacity-50"
-              : "cursor-pointer hover:text-[#1a1a1a]",
-            isLg ? "text-xs text-[#1a1a1a]" : "text-[10px] text-[#888]",
+            "inline-flex items-center gap-1.5 font-bold uppercase tracking-wider transition-all",
+            isLg
+              ? [
+                "h-10 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-xs text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)]",
+                disabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]",
+              ]
+              : [
+                "text-[10px] text-[#888]",
+                disabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer hover:text-[#1a1a1a]",
+              ],
             className,
           )}
           aria-label="Update review status"

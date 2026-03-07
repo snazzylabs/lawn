@@ -24,6 +24,11 @@ export default function ProjectPublicPage() {
     const token = searchParams.get("vg");
     return token && token.length > 0 ? token : null;
   }, [location.search]);
+  const videoPublicId = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const token = searchParams.get("vp");
+    return token && token.length > 0 ? token : null;
+  }, [location.search]);
 
   const [grantToken, setGrantToken] = useState<string | null>(null);
   const [hasAttemptedAutoGrant, setHasAttemptedAutoGrant] = useState(false);
@@ -47,7 +52,17 @@ export default function ProjectPublicPage() {
     api.projects.getByPublicIdForShareGrant,
     videoGrantToken ? { publicId, videoGrantToken } : "skip",
   );
-  const data = videoGrantToken ? videoGrantData : shareToken ? restrictedData : publicData;
+  const videoPublicData = useQuery(
+    api.projects.getByPublicIdForShareGrant,
+    videoPublicId ? { publicId, videoPublicId } : "skip",
+  );
+  const data = videoGrantToken
+    ? videoGrantData
+    : videoPublicId
+      ? videoPublicData
+      : shareToken
+        ? restrictedData
+        : publicData;
 
   useEffect(() => {
     setGrantToken(null);
@@ -95,7 +110,8 @@ export default function ProjectPublicPage() {
         (shareInfo?.status === "ok" &&
           ((!grantToken && (!hasAttemptedAutoGrant || isRequestingGrant)) ||
             (Boolean(grantToken) && restrictedData === undefined))))) ||
-    (Boolean(videoGrantToken) && videoGrantData === undefined);
+    (Boolean(videoGrantToken) && videoGrantData === undefined) ||
+    (Boolean(videoPublicId) && videoPublicData === undefined);
 
   if (isBootstrappingRestricted) {
     return (

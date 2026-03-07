@@ -548,6 +548,7 @@ export const getByPublicIdForShareGrant = query({
     publicId: v.string(),
     grantToken: v.optional(v.string()),
     videoGrantToken: v.optional(v.string()),
+    videoPublicId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let projectId: Id<"projects"> | null = null;
@@ -565,6 +566,16 @@ export const getByPublicIdForShareGrant = query({
       }
       const video = await ctx.db.get(resolvedVideoGrant.shareLink.videoId);
       if (!video) {
+        return null;
+      }
+      projectId = video.projectId;
+    } else if (args.videoPublicId) {
+      const requestedVideoPublicId = args.videoPublicId;
+      const video = await ctx.db
+        .query("videos")
+        .withIndex("by_public_id", (q) => q.eq("publicId", requestedVideoPublicId))
+        .unique();
+      if (!video || video.status !== "ready" || video.visibility !== "public") {
         return null;
       }
       projectId = video.projectId;

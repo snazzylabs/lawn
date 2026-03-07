@@ -175,6 +175,20 @@ export const create = mutation({
       finalCutApprovedByName: undefined,
     });
 
+    const existingProjectVideos = await ctx.db
+      .query("videos")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const existingVideo of existingProjectVideos) {
+      if (
+        existingVideo._id !== videoId &&
+        existingVideo.status === "ready" &&
+        existingVideo.workflowStatus !== "done"
+      ) {
+        await ctx.db.patch(existingVideo._id, { workflowStatus: "done" });
+      }
+    }
+
     await touchProjectActivity(ctx, args.projectId);
     try {
       await ctx.scheduler.runAfter(0, internal.notionActions.notifyProjectProofUploaded, {

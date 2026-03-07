@@ -1,4 +1,4 @@
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { Link, useParams } from "@tanstack/react-router";
@@ -17,7 +17,6 @@ import { cn, formatDuration, formatTimestamp, formatRelativeTime, getInitials } 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, MessageSquare, X, Pencil, Trash2, CheckCircle2, FolderOpen, UserRoundPen } from "lucide-react";
 import { HelpButton } from "@/components/HelpDialog";
-import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
 import { CommentAttachments } from "@/components/comments/CommentAttachments";
 import { CommentDrawingThumbnail } from "@/components/comments/CommentDrawingThumbnail";
 import { VideoWorkflowStatusSteps } from "@/components/videos/VideoWorkflowStatusSteps";
@@ -30,7 +29,7 @@ import { useWatchData } from "./-watch.data";
 export default function WatchPage() {
   const params = useParams({ strict: false });
   const publicId = params.publicId as string;
-  const { isLoaded: isUserLoaded, id: userId, name: signedInUserName } = useCurrentUser();
+  const { isLoaded: isUserLoaded, id: userId } = useCurrentUser();
 
   const { guest, setGuestIdentity, isReady: isGuestReady } = useGuestIdentity();
   const canComment = Boolean(userId || guest);
@@ -403,13 +402,6 @@ export default function WatchPage() {
     }
   }, [approveFinalCut, canComment, guest?.company, guest?.name, isApprovingFinalCut, publicId]);
 
-  const reactions = useQuery(
-    api.comments.getReactionsForVideo,
-    videoData?.video?._id
-      ? { videoId: videoData.video._id as Id<"videos"> }
-      : "skip",
-  );
-
   const scrollToComment = useCallback((commentId: string) => {
     const selector = `[data-comment-id="${commentId}"]`;
     const target = commentsPanelRef.current?.querySelector(selector)
@@ -474,8 +466,6 @@ export default function WatchPage() {
   }
 
   const video = videoData.video;
-  const userIdentifier = userId ?? guest?.guestId ?? "";
-  const userName = userId ? (signedInUserName ?? "Team Member") : (guest?.name ?? "");
 
   const renderComment = (
     comment: {
@@ -644,16 +634,6 @@ export default function WatchPage() {
                 </Button>
               )}
             </div>
-            {userIdentifier && userName && (
-              <div className="mt-1.5">
-                <EmojiReactionPicker
-                  commentId={comment._id as Id<"comments">}
-                  reactions={reactions?.[comment._id]}
-                  currentUserIdentifier={userIdentifier}
-                  currentUserName={userName}
-                />
-              </div>
-            )}
           </div>
         </div>
 
@@ -813,7 +793,7 @@ export default function WatchPage() {
         <div className="flex items-center gap-4">
           {video.projectPublicId ? (
             <a
-              href={`/projects/${video.projectPublicId}`}
+              href={`/projects/${video.projectPublicId}?vp=${encodeURIComponent(publicId)}`}
               className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
             >
               <FolderOpen className="h-3.5 w-3.5" />

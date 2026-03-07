@@ -1,4 +1,4 @@
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { Link, useParams } from "@tanstack/react-router";
@@ -19,7 +19,6 @@ import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { Lock, Video, AlertCircle, Pencil, Trash2, CheckCircle2, FolderOpen, UserRoundPen } from "lucide-react";
 import { HelpButton } from "@/components/HelpDialog";
-import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
 import { CommentAttachments } from "@/components/comments/CommentAttachments";
 import { CommentDrawingThumbnail } from "@/components/comments/CommentDrawingThumbnail";
 import { VideoWorkflowStatusSteps } from "@/components/videos/VideoWorkflowStatusSteps";
@@ -32,7 +31,7 @@ import { useShareData } from "./-share.data";
 export default function SharePage() {
   const params = useParams({ strict: false });
   const token = params.token as string;
-  const { isLoaded: isUserLoaded, id: userId, name: signedInUserName } = useCurrentUser();
+  const { isLoaded: isUserLoaded, id: userId } = useCurrentUser();
 
   const { guest, setGuestIdentity, isReady: isGuestReady } = useGuestIdentity();
   const canComment = Boolean(userId || guest);
@@ -458,13 +457,6 @@ export default function SharePage() {
     }
   }, [approveFinalCut, canComment, grantToken, guest?.company, guest?.name, isApprovingFinalCut]);
 
-  const reactions = useQuery(
-    api.comments.getReactionsForVideo,
-    videoData?.video?._id
-      ? { videoId: videoData.video._id as Id<"videos"> }
-      : "skip",
-  );
-
   const scrollToComment = useCallback((commentId: string) => {
     const selector = `[data-comment-id="${commentId}"]`;
     const target = commentsPanelRef.current?.querySelector(selector)
@@ -596,8 +588,6 @@ export default function SharePage() {
       : projectPublicId
         ? `/projects/${projectPublicId}`
         : null;
-  const userIdentifier = userId ?? guest?.guestId ?? "";
-  const userName = userId ? (signedInUserName ?? "Team Member") : (guest?.name ?? "");
 
   const renderComment = (
     comment: {
@@ -757,16 +747,6 @@ export default function SharePage() {
               </Button>
             )}
           </div>
-          {userIdentifier && userName && (
-            <div className="mt-1.5">
-              <EmojiReactionPicker
-                commentId={comment._id as Id<"comments">}
-                reactions={reactions?.[comment._id]}
-                currentUserIdentifier={userIdentifier}
-                currentUserName={userName}
-              />
-            </div>
-          )}
         </div>
       </div>
 

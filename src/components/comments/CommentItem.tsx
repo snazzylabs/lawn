@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useState, useRef, useEffect } from "react";
 import { CommentInput } from "./CommentInput";
-import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import { CommentAttachments } from "./CommentAttachments";
 import { CommentDrawingThumbnail } from "./CommentDrawingThumbnail";
 
@@ -55,15 +54,7 @@ interface CommentItemProps {
   isHighlighted?: boolean;
   isReply?: boolean;
   canResolve?: boolean;
-  reactions?: Array<{
-    emoji: string;
-    count: number;
-    userIdentifiers: string[];
-    userNames?: string[];
-  }>;
   inheritedResolved?: boolean;
-  currentUserIdentifier?: string;
-  currentUserName?: string;
   onSubmitComment?: (args: {
     text: string;
     timestampSeconds: number;
@@ -87,10 +78,7 @@ export function CommentItem({
   isHighlighted = false,
   isReply = false,
   canResolve = false,
-  reactions,
   inheritedResolved = false,
-  currentUserIdentifier,
-  currentUserName,
   onSubmitComment,
   isActive = false,
   onSelect,
@@ -354,16 +342,6 @@ export function CommentItem({
                   </Button>
                 )}
               </div>
-              {currentUserIdentifier && currentUserName && (
-                <div className="mt-1.5">
-                  <EmojiReactionPicker
-                    commentId={comment._id}
-                    reactions={reactions}
-                    currentUserIdentifier={currentUserIdentifier}
-                    currentUserName={currentUserName}
-                  />
-                </div>
-              )}
             </>
           )}
         </div>

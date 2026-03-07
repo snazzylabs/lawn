@@ -24,7 +24,6 @@ import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { resolveAttachmentContentType } from "@/lib/attachments";
-import { useCurrentUser } from "@/lib/auth";
 import {
   ATTACH_COMMENT_FILES_EVENT,
   OPEN_HELP_EVENT,
@@ -57,7 +56,6 @@ export default function VideoPage() {
   const params = useParams({ strict: false });
   const navigate = useNavigate({});
   const pathname = useLocation().pathname;
-  const { name: currentUserName } = useCurrentUser();
   const teamSlug = typeof params.teamSlug === "string" ? params.teamSlug : "";
   const projectId = params.projectId as Id<"projects">;
   const videoId = params.videoId as Id<"videos">;
@@ -679,7 +677,7 @@ export default function VideoPage() {
           )}
           <VideoWatchers watchers={watchers} />
         </div>
-        <div className="hidden sm:flex items-center gap-3 flex-shrink-0 border-l-2 border-[#1a1a1a]/20 pl-3 ml-1">
+        <div className="hidden sm:flex items-center gap-2 flex-shrink-0 border-l-2 border-[#1a1a1a]/20 pl-3 ml-1">
           <VideoWorkflowStatusControl
             status={video.workflowStatus}
             size="lg"
@@ -716,7 +714,7 @@ export default function VideoPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <HelpButton variant="outline" className="h-9 w-9" />
+          <HelpButton variant="outline" className="h-10 w-10" />
           {isDiscussionVisible && (
             <Button
               variant="outline"
@@ -741,10 +739,10 @@ export default function VideoPage() {
               void handleUpdateWorkflowStatus(workflowStatus);
             }}
           />
-          <HelpButton variant="outline" className="h-9 w-9" />
+          <HelpButton variant="outline" className="h-10 w-10" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-8 w-8">
+              <Button variant="outline" size="icon" className="h-10 w-10">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -975,8 +973,6 @@ export default function VideoPage() {
                 highlightedCommentId={highlightedCommentId}
                 canResolve={canEdit}
                 onVisibleIdsChange={setVisibleCommentIds}
-                currentUserIdentifier={context?.userSubject}
-                currentUserName={currentUserName ?? "Team Member"}
                 onSubmitComment={handleSubmitComment}
               />
             </div>
@@ -1038,8 +1034,6 @@ export default function VideoPage() {
               highlightedCommentId={highlightedCommentId}
               canResolve={canEdit}
               onVisibleIdsChange={setVisibleCommentIds}
-              currentUserIdentifier={context?.userSubject}
-              currentUserName={currentUserName ?? "Team Member"}
               onSubmitComment={handleSubmitComment}
             />
           </div>

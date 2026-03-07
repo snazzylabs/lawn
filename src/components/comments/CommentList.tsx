@@ -26,8 +26,6 @@ interface CommentListProps {
   highlightedCommentId?: Id<"comments">;
   canResolve?: boolean;
   onVisibleIdsChange?: (ids: Set<string>) => void;
-  currentUserIdentifier?: string;
-  currentUserName?: string;
   onSubmitComment?: (args: {
     text: string;
     timestampSeconds: number;
@@ -50,13 +48,10 @@ export function CommentList({
   highlightedCommentId,
   canResolve = false,
   onVisibleIdsChange,
-  currentUserIdentifier,
-  currentUserName,
   onSubmitComment,
 }: CommentListProps) {
   const queriedComments = useQuery(api.comments.getThreaded, { videoId });
   const comments = providedComments ?? queriedComments;
-  const reactions = useQuery(api.comments.getReactionsForVideo, { videoId });
   const toggleResolved = useMutation(api.comments.toggleResolved);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ResolvedFilter>("all");
@@ -231,21 +226,21 @@ export function CommentList({
             </button>
           )}
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               type="button"
               onClick={() => setFilter(f.key)}
               className={cn(
-                "px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide transition-colors",
+                "inline-flex h-7 items-center gap-1 border-2 px-2 text-[10px] font-bold uppercase tracking-[0.08em] shadow-[2px_2px_0px_0px_var(--shadow-accent)] transition-all",
                 filter === f.key
-                  ? "bg-[#2F6DB4] text-white"
-                  : "text-[#888] hover:text-[#1a1a1a]",
+                  ? "border-[color:var(--button-border)] bg-[color:var(--accent)]/20 text-[color:var(--button-text)]"
+                  : "border-[color:var(--button-border)] bg-[color:var(--button-fill)] text-[color:var(--foreground-muted)] hover:text-[color:var(--button-text)]",
               )}
             >
               {f.label}
-              <span className="ml-1 font-mono font-normal">{f.count}</span>
+              <span className="font-mono font-normal">{f.count}</span>
             </button>
           ))}
         </div>
@@ -270,9 +265,6 @@ export function CommentList({
                   externalEditRange={externalEditRange}
                   isHighlighted={highlightedCommentId === comment._id}
                   canResolve={canResolve}
-                  reactions={reactions?.[comment._id as string]}
-                  currentUserIdentifier={currentUserIdentifier}
-                  currentUserName={currentUserName}
                   onSubmitComment={onSubmitComment}
                   isActive={activeCommentId === comment._id}
                   onSelect={setActiveCommentId}
