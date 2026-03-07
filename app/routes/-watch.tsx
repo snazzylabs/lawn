@@ -794,7 +794,7 @@ export default function WatchPage() {
           {video.projectPublicId ? (
             <a
               href={`/projects/${video.projectPublicId}?vp=${encodeURIComponent(publicId)}`}
-              className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
+              className="inline-flex h-10 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
             >
               <FolderOpen className="h-3.5 w-3.5" />
               <span className="hidden lg:inline">Project</span>
@@ -819,7 +819,7 @@ export default function WatchPage() {
             <div className="relative">
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-2 text-[11px] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
+                className="inline-flex h-10 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-2 text-[11px] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
                 onClick={() => setIsEditingGuestIdentity((prev) => !prev)}
                 title="Edit reviewer name"
               >
@@ -878,7 +878,7 @@ export default function WatchPage() {
             <Button
               size="sm"
               className={cn(
-                "h-8",
+                "h-10 px-4",
                 isSubmitReviewFlashing && !reviewSubmitted && "animate-pulse ring-2 ring-[color:var(--accent)] ring-offset-2 ring-offset-[color:var(--background)]",
               )}
               disabled={reviewSubmitted}
@@ -914,7 +914,7 @@ export default function WatchPage() {
           <Button
             variant="outline"
             size="sm"
-            className="md:hidden h-8"
+            className="md:hidden h-10 px-4"
             onClick={() => setMobileCommentsOpen(true)}
           >
             <MessageSquare className="h-4 w-4" />
