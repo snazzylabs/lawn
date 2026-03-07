@@ -11,6 +11,7 @@ import { prewarmDashboardIndex } from "../../app/routes/dashboard/-index.data";
 import { isSelfHosted } from "@/lib/selfHosted";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { videoPath } from "@/lib/routes";
+import { HelpButton } from "@/components/HelpDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,11 +120,13 @@ export function DashboardHeader({
   paths = [],
   teamId,
   teamSlug,
+  showHelp = true,
 }: {
   children?: React.ReactNode;
   paths?: PathSegment[];
   teamId?: Id<"teams">;
   teamSlug?: string;
+  showHelp?: boolean;
 }) {
   const convex = useConvex();
   const prewarmHomeIntentHandlers = useRoutePrewarmIntent(() =>
@@ -168,6 +171,7 @@ export function DashboardHeader({
 
       {/* User controls — pinned top-right */}
       <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-2 sm:gap-3 pl-3 sm:pl-4 border-l-2 border-[#1a1a1a]/10 h-8">
+        {showHelp && <HelpButton chrome="toolbarIcon" />}
         {teamId && teamSlug && <NotificationBell teamId={teamId} teamSlug={teamSlug} />}
         <ThemeToggleButton />
         {isSelfHosted ? (

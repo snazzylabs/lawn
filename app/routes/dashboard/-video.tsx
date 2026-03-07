@@ -12,15 +12,12 @@ import { DrawingToolbar } from "@/components/video-player/DrawingToolbar";
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
-import { HelpButton } from "@/components/HelpDialog";
 import {
   VideoWorkflowStatusControl,
   type VideoWorkflowStatus,
 } from "@/components/videos/VideoWorkflowStatusControl";
 import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compositeDrawing";
 import { downloadFCPXML, downloadPremiereCSV, downloadDaVinciEDL } from "@/lib/nleExport";
-import { useVideoPresence } from "@/lib/useVideoPresence";
-import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { resolveAttachmentContentType } from "@/lib/attachments";
 import {
@@ -208,11 +205,6 @@ export default function VideoPage() {
       projectId: resolvedProjectId,
     });
   });
-  const { watchers } = useVideoPresence({
-    videoId: resolvedVideoId,
-    enabled: Boolean(resolvedVideoId),
-  });
-
   useEffect(() => {
     currentTimeRef.current = currentTime;
   }, [currentTime]);
@@ -665,10 +657,6 @@ export default function VideoPage() {
           )
         }
       ]} teamId={context?.team._id} teamSlug={resolvedTeamSlug}>
-        {/* Desktop: inline actions */}
-        <div className="hidden lg:flex items-center gap-3 text-xs text-[#888]">
-          <VideoWatchers watchers={watchers} />
-        </div>
         <div className="hidden sm:flex items-center gap-2 flex-shrink-0 border-l-2 border-[#1a1a1a]/20 pl-3 ml-1">
           <VideoWorkflowStatusControl
             status={video.workflowStatus}
@@ -707,7 +695,6 @@ export default function VideoPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <HelpButton chrome="toolbarIcon" />
           {isDiscussionVisible && (
             <Button
               variant="outline"
@@ -732,7 +719,6 @@ export default function VideoPage() {
               void handleUpdateWorkflowStatus(workflowStatus);
             }}
           />
-          <HelpButton chrome="toolbarIcon" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-10 w-10">
