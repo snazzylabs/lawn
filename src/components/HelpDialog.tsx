@@ -66,44 +66,47 @@ export function HelpButton({
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[min(96vw,980px)] max-w-[980px] max-h-[85vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Keyboard Shortcuts</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              {SHORTCUTS.map((shortcut) => (
-                <div key={shortcut.description} className="flex items-center justify-between text-sm">
-                  <span className="text-[#1a1a1a]">{shortcut.description}</span>
-                  <div className="flex items-center gap-1">
-                    {shortcut.keys.map((key) => (
-                      <kbd
-                        key={key}
-                        className="inline-flex items-center justify-center min-w-[28px] h-6 px-1.5 border-2 border-[#1a1a1a] bg-[#e8e8e0] text-xs font-mono font-bold text-[#1a1a1a]"
-                      >
-                        {key}
-                      </kbd>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="border-t-2 border-[#1a1a1a]/10 pt-4">
-              <h3 className="text-sm font-bold text-[#1a1a1a] mb-2">Tools</h3>
-              <div className="space-y-2">
-                {TOOLS.map((tool) => (
-                  <div key={tool.name} className="text-sm flex items-start gap-2">
-                    <span className="inline-flex h-6 w-6 items-center justify-center border-2 border-[#1a1a1a] bg-[#e8e8e0] text-[#1a1a1a] shrink-0">
-                      <tool.icon className="h-3.5 w-3.5" />
-                    </span>
-                    <div>
-                      <span className="font-bold text-[#1a1a1a]">{tool.name}</span>
-                      <span className="text-[#888] ml-1.5">— {tool.description}</span>
+          <div className="min-h-0 overflow-y-auto pr-1">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2 border-2 border-[#1a1a1a] bg-[#e8e8e0] p-3">
+                <h3 className="text-sm font-bold text-[#1a1a1a]">Shortcuts</h3>
+                {SHORTCUTS.map((shortcut) => (
+                  <div key={shortcut.description} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-[#1a1a1a]">{shortcut.description}</span>
+                    <div className="flex items-center gap-1">
+                      {shortcut.keys.map((key) => (
+                        <kbd
+                          key={key}
+                          className="inline-flex items-center justify-center min-w-[28px] h-6 px-1.5 border-2 border-[#1a1a1a] bg-[#f0f0e8] text-xs font-mono font-bold text-[#1a1a1a]"
+                        >
+                          {key}
+                        </kbd>
+                      ))}
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="border-2 border-[#1a1a1a] bg-[#e8e8e0] p-3">
+                <h3 className="text-sm font-bold text-[#1a1a1a] mb-2">Tools</h3>
+                <div className="space-y-2">
+                  {TOOLS.map((tool) => (
+                    <div key={tool.name} className="text-sm flex items-start gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center border-2 border-[#1a1a1a] bg-[#f0f0e8] text-[#1a1a1a] shrink-0">
+                        <tool.icon className="h-3.5 w-3.5" />
+                      </span>
+                      <div>
+                        <span className="font-bold text-[#1a1a1a]">{tool.name}</span>
+                        <span className="text-[#666] ml-1.5">{tool.description}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
