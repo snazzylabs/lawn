@@ -444,6 +444,7 @@ export default function ProjectPage({
   }
 
   const canUpload = project?.role !== "viewer";
+  const canUndoConfirmedDelivery = project?.role === "admin";
 
   return (
     <div className="h-full flex flex-col">
@@ -644,7 +645,7 @@ export default function ProjectPage({
                             <LinkIcon className="mr-2 h-4 w-4" />
                             Share
                           </DropdownMenuItem>
-                          {video.finalCutApprovedAt && canUpload && (
+                          {video.finalCutApprovedAt && canUndoConfirmedDelivery && (
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -854,7 +855,7 @@ export default function ProjectPage({
                         <LinkIcon className="mr-2 h-4 w-4" />
                         Share
                       </DropdownMenuItem>
-                      {video.finalCutApprovedAt && canUpload && (
+                      {video.finalCutApprovedAt && canUndoConfirmedDelivery && (
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
