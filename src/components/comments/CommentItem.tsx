@@ -66,6 +66,8 @@ interface CommentItemProps {
     parentId?: Id<"comments">;
     files?: File[];
   }) => Promise<void>;
+  isActive?: boolean;
+  onSelect?: (commentId: Id<"comments">) => void;
 }
 
 export function CommentItem({
@@ -83,6 +85,8 @@ export function CommentItem({
   currentUserIdentifier,
   currentUserName,
   onSubmitComment,
+  isActive = false,
+  onSelect,
 }: CommentItemProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -181,14 +185,17 @@ export function CommentItem({
 
   return (
     <div
+      data-comment-id={comment._id}
       className={cn(
         "transition-all relative group",
         isReply ? "py-2" : "p-4",
         isHighlighted
           ? "bg-[#2F6DB4]/10"
           : "hover:bg-[#1a1a1a]/5",
-        comment.resolved && "opacity-50"
+        comment.resolved && "opacity-50",
+        isActive && "bg-[#2F6DB4]/15 outline outline-1 outline-[#2F6DB4]"
       )}
+      onClick={() => onSelect?.(comment._id)}
     >
       <div className="flex items-start gap-3">
         <Avatar className="h-9 w-9 shadow-sm">

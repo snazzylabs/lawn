@@ -19,6 +19,7 @@ interface CommentInputProps {
   autoFocus?: boolean;
   placeholder?: string;
   showTimestamp?: boolean;
+  timestampOverrideSeconds?: number | null;
   variant?: "default" | "seamless";
   onRangeChange?: (range: { inTime: number; outTime: number } | null) => void;
   externalRange?: { inTime: number; outTime: number } | null;
@@ -45,6 +46,7 @@ export function CommentInput({
   autoFocus = false,
   placeholder,
   showTimestamp = false,
+  timestampOverrideSeconds = null,
   variant = "default",
   onRangeChange,
   externalRange,
@@ -90,8 +92,10 @@ export function CommentInput({
     }
   }, [externalRange]);
 
-  const defaultPlaceholder = showTimestamp 
-    ? `Comment at ${formatTimestamp(timestampSeconds)}...` 
+  const effectiveTimestamp = timestampOverrideSeconds ?? timestampSeconds;
+
+  const defaultPlaceholder = showTimestamp
+    ? `Comment at ${formatTimestamp(effectiveTimestamp)}...`
     : "Add a comment...";
   const finalPlaceholder = placeholder || defaultPlaceholder;
 
@@ -173,7 +177,7 @@ export function CommentInput({
       const parsedOut = rangeMode ? parseTimestampInput(outTime) : null;
       const payload = {
         text: text.trim(),
-        timestampSeconds: parsedIn ?? timestampSeconds,
+        timestampSeconds: parsedIn ?? effectiveTimestamp,
         ...(parsedOut !== null ? { endTimestampSeconds: parsedOut } : {}),
         ...(drawingData ? { drawingData } : {}),
         parentId,
@@ -284,6 +288,22 @@ export function CommentInput({
         </div>
       )}
 
+      {!rangeMode && showTimestamp && timestampOverrideSeconds !== null && (
+        <div
+          className={
+            variant === "seamless"
+              ? "mx-4 mb-2 border-2 border-[#1a1a1a] bg-[#e8e8e0] px-2 py-1.5 text-xs"
+              : "mx-3 mb-2 border-2 border-[#1a1a1a] bg-[#e8e8e0] px-2 py-1.5 text-xs"
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-[#2F6DB4]" />
+            <span className="font-mono text-[#666]">Timestamp</span>
+            <span className="font-mono text-[#1a1a1a]">{formatTimestamp(timestampOverrideSeconds)}</span>
+          </div>
+        </div>
+      )}
+
       {drawingData && (
         <div
           className={
@@ -293,7 +313,7 @@ export function CommentInput({
           }
         >
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-mono text-[#666]">Annotation preview</p>
+            <p className="text-[11px] font-mono text-[#666]">Mark preview</p>
             {onClearDrawing && (
               <button
                 type="button"
@@ -387,7 +407,7 @@ export function CommentInput({
                 size="icon"
                 className={`h-8 w-8 shrink-0 ${drawingData ? "bg-[#2F6DB4]/10 text-[#2F6DB4]" : ""}`}
                 onClick={onDrawingRequest}
-                title="Draw annotation"
+                title="Mark frame"
               >
                 <Pencil className="h-4 w-4" />
               </Button>

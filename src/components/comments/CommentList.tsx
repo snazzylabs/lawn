@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import { useQuery } from "convex/react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { FunctionReturnType } from "convex/server";
@@ -9,6 +9,7 @@ import { CommentItem } from "./CommentItem";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isTextEntryTarget } from "@/lib/commentHotkeys";
 
 type ThreadedComments = FunctionReturnType<typeof api.comments.getThreaded>;
 type ResolvedFilter = "all" | "open" | "resolved";
@@ -56,8 +57,11 @@ export function CommentList({
   const queriedComments = useQuery(api.comments.getThreaded, { videoId });
   const comments = providedComments ?? queriedComments;
   const reactions = useQuery(api.comments.getReactionsForVideo, { videoId });
+  const toggleResolved = useMutation(api.comments.toggleResolved);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ResolvedFilter>("all");
+  const [activeCommentId, setActiveCommentId] = useState<Id<"comments"> | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const resolvedCount = useMemo(
     () => comments?.filter((c) => c.resolved).length ?? 0,
@@ -102,6 +106,86 @@ export function CommentList({
     }
   }, [filtered, filter, search, onVisibleIdsChange]);
 
+  const keyboardItems = useMemo(() => {
+    if (!filtered) return [] as Array<{ id: Id<"comments">; canResolve: boolean }>;
+    return filtered.flatMap((comment) => [
+      { id: comment._id, canResolve: true },
+      ...comment.replies.map((reply) => ({ id: reply._id, canResolve: false })),
+    ]);
+  }, [filtered]);
+
+  useEffect(() => {
+    if (keyboardItems.length === 0) {
+      setActiveCommentId(null);
+      return;
+    }
+    if (activeCommentId && keyboardItems.some((item) => item.id === activeCommentId)) {
+      return;
+    }
+    setActiveCommentId(keyboardItems[0]?.id ?? null);
+  }, [activeCommentId, keyboardItems]);
+
+  useEffect(() => {
+    if (!activeCommentId) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const escapedId = typeof CSS !== "undefined" && CSS.escape
+      ? CSS.escape(activeCommentId)
+      : activeCommentId.replace(/"/g, '\\"');
+    const el = root.querySelector<HTMLElement>(`[data-comment-id="${escapedId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeCommentId]);
+
+  const moveSelection = useCallback((delta: number) => {
+    if (keyboardItems.length === 0) return;
+    setActiveCommentId((prev) => {
+      const currentIndex = prev ? keyboardItems.findIndex((item) => item.id === prev) : -1;
+      if (currentIndex === -1) {
+        return keyboardItems[Math.max(0, delta > 0 ? 0 : keyboardItems.length - 1)]?.id ?? null;
+      }
+      const nextIndex = Math.min(
+        Math.max(currentIndex + delta, 0),
+        keyboardItems.length - 1,
+      );
+      return keyboardItems[nextIndex]?.id ?? prev;
+    });
+  }, [keyboardItems]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const root = rootRef.current;
+      if (!root) return;
+      const style = window.getComputedStyle(root);
+      const isVisible = root.offsetParent !== null || style.position === "fixed";
+      if (!isVisible) return;
+
+      if (isTextEntryTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        moveSelection(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        moveSelection(-1);
+        return;
+      }
+      if ((event.key === "r" || event.key === "R") && canResolve && activeCommentId) {
+        const activeItem = keyboardItems.find((item) => item.id === activeCommentId);
+        if (!activeItem || !activeItem.canResolve) return;
+        event.preventDefault();
+        void toggleResolved({ commentId: activeCommentId });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [activeCommentId, canResolve, keyboardItems, moveSelection, toggleResolved]);
+
   if (comments === undefined) {
     return (
       <div className="p-4 text-center text-[#888]">Loading...</div>
@@ -126,7 +210,7 @@ export function CommentList({
   ];
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={rootRef} className="flex h-full flex-col">
       <div className="shrink-0 border-b border-[#1a1a1a]/10 dark:border-white/10 px-3 pt-3 pb-2 space-y-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#888]" />
@@ -190,6 +274,8 @@ export function CommentList({
                   currentUserIdentifier={currentUserIdentifier}
                   currentUserName={currentUserName}
                   onSubmitComment={onSubmitComment}
+                  isActive={activeCommentId === comment._id}
+                  onSelect={setActiveCommentId}
                 />
                 {comment.replies.length > 0 && (
                   <div className="pl-14 pr-4 pb-4 space-y-4 relative">
@@ -208,6 +294,8 @@ export function CommentList({
                         isReply
                         canResolve={canResolve}
                         onSubmitComment={onSubmitComment}
+                        isActive={activeCommentId === reply._id}
+                        onSelect={setActiveCommentId}
                       />
                     ))}
                   </div>

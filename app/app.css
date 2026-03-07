@@ -79,12 +79,12 @@
   --border: #1a1a1a;
   --border-subtle: #cccccc;
   --shadow-color: #1a1a1a;
-  --shadow-accent: rgba(76,167,248,1);
+  --shadow-accent: rgba(54,114,181,1);
 
   /* Accent - blue */
-  --accent: #4CA7F8;
-  --accent-hover: #3a95e0;
-  --accent-light: #7cb8f0;
+  --accent: #3672B5;
+  --accent-hover: #2c619c;
+  --accent-light: #5f90c4;
 
   /* Semantic colors */
   --destructive: #dc2626;
@@ -365,8 +365,8 @@ body {
 
 /* Snazzy Labs landing/auth pages */
 :root {
-  --sl-accent: #4CA7F8;
-  --sl-accent-hover: #3a95e0;
+  --sl-accent: #3672B5;
+  --sl-accent-hover: #2c619c;
   --sl-bg: #f8f9fa;
   --sl-card-bg: rgba(255, 255, 255, 0.7);
 }

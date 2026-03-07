@@ -103,6 +103,7 @@ export default function VideoPage() {
   const [preferredSource, setPreferredSource] = useState<"mux720" | "original" | null>(null);
   const [rangeMarker, setRangeMarker] = useState<{ inTime: number; outTime: number } | null>(null);
   const [pendingInPoint, setPendingInPoint] = useState<number | null>(null);
+  const [pendingCommentTimestamp, setPendingCommentTimestamp] = useState<number | null>(null);
   const [editingMarker, setEditingMarker] = useState<{ timestampSeconds: number } | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<Id<"comments"> | null>(null);
   const [visibleCommentIds, setVisibleCommentIds] = useState<Set<string>>(new Set());
@@ -114,20 +115,41 @@ export default function VideoPage() {
   const playerRef = useRef<VideoPlayerHandle | null>(null);
   const currentTimeRef = useRef(0);
   const pendingInTimeRef = useRef<number | null>(null);
+  const dragDepthRef = useRef(0);
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
   const canComment = true;
 
   useEffect(() => {
     const dragEventHasFiles = (event: DragEvent) =>
       Array.from(event.dataTransfer?.types ?? []).includes("Files");
 
+    const handleDragEnter = (event: DragEvent) => {
+      if (!dragEventHasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setIsFileDragActive(true);
+    };
+
     const handleDragOver = (event: DragEvent) => {
       if (!dragEventHasFiles(event)) return;
       event.preventDefault();
+      setIsFileDragActive(true);
+    };
+
+    const handleDragLeave = (event: DragEvent) => {
+      if (!dragEventHasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+      if (dragDepthRef.current === 0) {
+        setIsFileDragActive(false);
+      }
     };
 
     const handleDrop = (event: DragEvent) => {
       if (!dragEventHasFiles(event)) return;
       event.preventDefault();
+      dragDepthRef.current = 0;
+      setIsFileDragActive(false);
 
       const files = Array.from(event.dataTransfer?.files ?? []);
       if (files.length === 0) return;
@@ -144,11 +166,15 @@ export default function VideoPage() {
       focusVisibleCommentInputSoon();
     };
 
+    window.addEventListener("dragenter", handleDragEnter);
     window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
     window.addEventListener("drop", handleDrop);
 
     return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
       window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
       window.removeEventListener("drop", handleDrop);
     };
   }, []);
@@ -198,7 +224,12 @@ export default function VideoPage() {
 
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
+        e.stopPropagation();
         if (!canComment) return;
+        setPendingCommentTimestamp(currentTimeRef.current);
+        if (isFinalCutVideo && !showDiscussionForFinalCut) {
+          setShowDiscussionForFinalCut(true);
+        }
         if (window.matchMedia("(max-width: 1023px)").matches) {
           setMobileCommentsOpen(true);
         }
@@ -208,27 +239,65 @@ export default function VideoPage() {
 
       if (e.code === "Space" || e.key === " ") {
         e.preventDefault();
+        e.stopPropagation();
         playerRef.current?.togglePlay();
         return;
       }
 
       if (e.key === "?") {
         e.preventDefault();
+        e.stopPropagation();
         window.dispatchEvent(new Event(OPEN_HELP_EVENT));
+        return;
+      }
+
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canComment) return;
+        if (isFinalCutVideo && !showDiscussionForFinalCut) {
+          setShowDiscussionForFinalCut(true);
+        }
+        playerRef.current?.pause();
+        setDrawingMode(true);
+        return;
+      }
+
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        e.stopPropagation();
+        playerRef.current?.adjustPlaybackRate(-0.25);
+        return;
+      }
+
+      if (e.key === "l" || e.key === "L") {
+        e.preventDefault();
+        e.stopPropagation();
+        playerRef.current?.adjustPlaybackRate(0.25);
+        return;
+      }
+
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        e.stopPropagation();
+        playerRef.current?.setPlaybackRate(1);
         return;
       }
 
       if (e.key === "i" || e.key === "I") {
         e.preventDefault();
+        e.stopPropagation();
         const time = currentTimeRef.current;
         pendingInTimeRef.current = time;
         setPendingInPoint(time);
         setRangeMarker(null);
+        setPendingCommentTimestamp(null);
         return;
       }
 
       if (e.key === "o" || e.key === "O") {
         e.preventDefault();
+        e.stopPropagation();
         const outTime = currentTimeRef.current;
         const pendingIn = pendingInTimeRef.current;
         const start = pendingIn ?? Math.max(0, outTime - 5);
@@ -238,13 +307,17 @@ export default function VideoPage() {
         });
         setPendingInPoint(null);
         pendingInTimeRef.current = null;
+        setPendingCommentTimestamp(null);
+        if (isFinalCutVideo && !showDiscussionForFinalCut) {
+          setShowDiscussionForFinalCut(true);
+        }
         focusVisibleCommentInputSoon();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [canComment]);
+  }, [canComment, isFinalCutVideo, showDiscussionForFinalCut]);
 
   useEffect(() => {
     if (shouldCanonicalize && context) {
@@ -426,6 +499,7 @@ export default function VideoPage() {
       setDrawingMode(false);
       setRangeMarker(null);
       setPendingInPoint(null);
+      setPendingCommentTimestamp(null);
       pendingInTimeRef.current = null;
 
       const activeElement = document.activeElement;
@@ -455,12 +529,14 @@ export default function VideoPage() {
           setRangeMarker(null);
         }
         setPendingInPoint(null);
+        setPendingCommentTimestamp(null);
         pendingInTimeRef.current = null;
       } else {
         setEditingCommentId(null);
         setEditingMarker(null);
         setRangeMarker(null);
         setPendingInPoint(null);
+        setPendingCommentTimestamp(null);
         pendingInTimeRef.current = null;
       }
     },
@@ -675,13 +751,13 @@ export default function VideoPage() {
       </DashboardHeader>
 
       {video.isFinalProof && (
-        <div className="border-b border-amber-700/35 bg-amber-100 text-amber-950 dark:border-amber-300/30 dark:bg-amber-900/30 dark:text-amber-100 px-4 py-3 sm:px-6">
+        <div className="border-b border-amber-700/35 bg-amber-100 px-4 py-3 text-amber-950 dark:border-[#8a6334] dark:bg-[#4b3520] dark:text-[#f3e6c7] sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-900 dark:text-amber-100">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-900 dark:text-[#f8e8c7]">
                 Final Proof
               </p>
-              <p className="text-sm text-amber-900/90 dark:text-amber-100/90">
+              <p className="text-sm text-amber-900/90 dark:text-[#f3e6c7]/95">
                 {video.finalCutApprovedAt
                   ? `Approved by ${video.finalCutApprovedByName ?? "team"} and ready for publishing.`
                   : "We hope you like our changes! Approve to notify team for publishing."}
@@ -691,7 +767,7 @@ export default function VideoPage() {
               {!isDiscussionVisible && (
                 <Button
                   variant="outline"
-                  className="h-11 border border-amber-900/35 bg-white/85 px-5 text-sm font-black uppercase tracking-wide text-amber-900 hover:bg-white dark:border-amber-200/35 dark:bg-black/25 dark:text-amber-100 dark:hover:bg-black/35"
+                  className="h-11 border border-amber-900/35 bg-white/85 px-5 text-sm font-black uppercase tracking-wide text-amber-900 hover:bg-white dark:border-[#d3b184] dark:bg-[#3b2918] dark:text-[#f8e8c7] dark:hover:bg-[#493422]"
                   onClick={() => setShowDiscussionForFinalCut(true)}
                 >
                   Edits Required
@@ -748,6 +824,7 @@ export default function VideoPage() {
                 }}
                 rangeMarker={rangeMarker ?? undefined}
                 pendingInPoint={pendingInPoint ?? undefined}
+                pendingCommentPoint={pendingCommentTimestamp ?? undefined}
                 onRangeMarkerDrag={(handle, time) => {
                   setRangeMarker((prev) => prev ? {
                     inTime: handle === "in" ? time : prev.inTime,
@@ -804,6 +881,13 @@ export default function VideoPage() {
                     }}
                   />
                 </>
+              )}
+              {isFileDragActive && (
+                <div className="pointer-events-none absolute inset-6 z-40 flex items-center justify-center border-2 border-dashed border-[color:var(--accent)] bg-black/45">
+                  <div className="rounded border border-[color:var(--accent)] bg-black/70 px-4 py-2 text-sm font-bold uppercase tracking-wide text-white">
+                    Drop file here to attach
+                  </div>
+                </div>
               )}
             </div>
           ) : (
@@ -870,7 +954,8 @@ export default function VideoPage() {
               <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8]">
                 <CommentInput
                   videoId={resolvedVideoId}
-                  timestampSeconds={currentTime}
+                  timestampSeconds={pendingCommentTimestamp ?? currentTime}
+                  timestampOverrideSeconds={pendingCommentTimestamp}
                   showTimestamp
                   variant="seamless"
                   hotkeyTarget
@@ -932,7 +1017,8 @@ export default function VideoPage() {
             <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8]">
               <CommentInput
                 videoId={resolvedVideoId}
-                timestampSeconds={currentTime}
+                timestampSeconds={pendingCommentTimestamp ?? currentTime}
+                timestampOverrideSeconds={pendingCommentTimestamp}
                 showTimestamp
                 variant="seamless"
                 hotkeyTarget

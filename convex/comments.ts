@@ -194,6 +194,16 @@ async function touchProjectActivityByVideo(
   await ctx.db.patch(video.projectId, { lastActivityAt: Date.now() });
 }
 
+async function markVideoAsRework(
+  ctx: MutationCtx,
+  videoId: Id<"videos">,
+) {
+  const video = await ctx.db.get(videoId);
+  if (!video) return;
+  if (video.workflowStatus === "rework") return;
+  await ctx.db.patch(videoId, { workflowStatus: "rework" });
+}
+
 async function purgeCommentArtifacts(ctx: MutationCtx, commentId: Id<"comments">) {
   const attachments = await ctx.db
     .query("commentAttachments")
@@ -364,6 +374,7 @@ export const createForPublic = mutation({
       message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
       actorUserClerkId: user?.subject,
     });
+    await markVideoAsRework(ctx, video._id);
     await scheduleNotionClientCommentNotification(ctx, {
       commentId,
       source: "public",
@@ -431,6 +442,7 @@ export const createForShareGrant = mutation({
       message: `${actorName} ${action} on "${video.title}"${textSnippet ? `: "${textSnippet}"` : ""}`,
       actorUserClerkId: user?.subject,
     });
+    await markVideoAsRework(ctx, video._id);
     await scheduleNotionClientCommentNotification(ctx, {
       commentId,
       source: "share_grant",

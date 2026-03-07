@@ -15,8 +15,14 @@ import { cn } from "@/lib/utils";
 const SHORTCUTS = [
   { keys: ["Space"], description: "Play/Pause (outside text fields)" },
   { keys: ["N"], description: "Focus new comment" },
+  { keys: ["M"], description: "Pause and start mark mode" },
   { keys: ["I"], description: "Mark In point at current time" },
   { keys: ["O"], description: "Mark Out point and focus comment" },
+  { keys: ["J"], description: "Playback speed -0.25x" },
+  { keys: ["K"], description: "Playback speed reset to 1x" },
+  { keys: ["L"], description: "Playback speed +0.25x" },
+  { keys: ["R"], description: "Resolve selected comment" },
+  { keys: ["↑", "↓"], description: "Move selection in comments" },
   { keys: ["?"], description: "Open this help menu" },
   { keys: ["Enter"], description: "Submit comment" },
   { keys: ["Shift", "Enter"], description: "New line in comment" },
@@ -26,7 +32,7 @@ const SHORTCUTS = [
 const TOOLS = [
   { name: "Timestamped Comments", description: "Comments pin to the current playback time", icon: MessageSquareText },
   { name: "In/Out Ranges", description: "Press I then O to mark a range on the timeline", icon: Scissors },
-  { name: "Draw on Frame", description: "Annotate directly on the video frame", icon: Pencil },
+  { name: "Mark Frame", description: "Annotate directly on the video frame", icon: Pencil },
   { name: "Attach Files", description: "Upload PDFs, images, or videos with your notes", icon: Paperclip },
 ] as const;
 

@@ -68,6 +68,8 @@ export default function SharePage() {
 
   // Range state
   const [rangeMarker, setRangeMarker] = useState<{ inTime: number; outTime: number } | null>(null);
+  const [pendingInPoint, setPendingInPoint] = useState<number | null>(null);
+  const [pendingCommentTimestamp, setPendingCommentTimestamp] = useState<number | null>(null);
   const currentTimeRef = useRef(0);
   const pendingInTimeRef = useRef<number | null>(null);
 
@@ -107,27 +109,67 @@ export default function SharePage() {
 
       if (e.key === "n" || e.key === "N") {
         e.preventDefault();
+        e.stopPropagation();
         if (!canComment) {
           setShowOnboarding(true);
           return;
         }
+        setPendingCommentTimestamp(currentTimeRef.current);
         focusVisibleCommentInputSoon();
         return;
       }
 
       if (e.key === "?") {
         e.preventDefault();
+        e.stopPropagation();
         window.dispatchEvent(new Event(OPEN_HELP_EVENT));
+        return;
+      }
+
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canComment) {
+          setShowOnboarding(true);
+          return;
+        }
+        playerRef.current?.pause();
+        setDrawingMode(true);
+        return;
+      }
+
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        e.stopPropagation();
+        playerRef.current?.adjustPlaybackRate(-0.25);
+        return;
+      }
+
+      if (e.key === "l" || e.key === "L") {
+        e.preventDefault();
+        e.stopPropagation();
+        playerRef.current?.adjustPlaybackRate(0.25);
+        return;
+      }
+
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        e.stopPropagation();
+        playerRef.current?.setPlaybackRate(1);
         return;
       }
 
       if (e.key === "i" || e.key === "I") {
         e.preventDefault();
+        e.stopPropagation();
         const time = currentTimeRef.current;
         pendingInTimeRef.current = time;
+        setPendingInPoint(time);
         setRangeMarker(null);
+        setPendingCommentTimestamp(null);
       } else if (e.key === "o" || e.key === "O") {
         e.preventDefault();
+        e.stopPropagation();
         const outTime = currentTimeRef.current;
         const pendingIn = pendingInTimeRef.current;
         const start = pendingIn ?? Math.max(0, outTime - 5);
@@ -135,7 +177,9 @@ export default function SharePage() {
           inTime: Math.min(start, outTime),
           outTime: Math.max(start, outTime),
         });
+        setPendingInPoint(null);
         pendingInTimeRef.current = null;
+        setPendingCommentTimestamp(null);
         focusVisibleCommentInputSoon();
       }
     };
@@ -328,6 +372,10 @@ export default function SharePage() {
       }
       setDrawingData(null);
       setDrawingMode(false);
+      setRangeMarker(null);
+      setPendingInPoint(null);
+      setPendingCommentTimestamp(null);
+      pendingInTimeRef.current = null;
     },
     [createComment, grantToken, guest, getAttachmentUploadUrl, createAttachmentMut, prepareDrawingForComment],
   );
@@ -782,16 +830,16 @@ export default function SharePage() {
       </header>
 
       {video.isFinalProof && (
-        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-6 py-3">
+        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-6 py-3 dark:border-[#8a6334] dark:bg-[#4b3520]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a] dark:text-[#f8e8c7]">
                 Final Proof
               </p>
-              <p className="text-sm text-[#1a1a1a]">
+              <p className="text-sm text-[#1a1a1a] dark:text-[#f3e6c7]">
                 {video.finalCutApprovedAt
                   ? `Approved by ${video.finalCutApprovedByName ?? "client"} and ready for publishing.`
-                  : "Approve this final cut to notify the team it is ready for publishing."}
+                  : "We hope you like our changes! Approve to notify team for publishing."}
               </p>
             </div>
             {video.finalCutApprovedAt ? (
@@ -842,6 +890,8 @@ export default function SharePage() {
                 onTimeUpdate={setCurrentTime}
                 allowDownload={false}
                 rangeMarker={rangeMarker ?? undefined}
+                pendingInPoint={pendingInPoint ?? undefined}
+                pendingCommentPoint={pendingCommentTimestamp ?? undefined}
                 maxQualityHeight={!userId ? 720 : undefined}
               />
               {drawingMode && (
@@ -900,7 +950,8 @@ export default function SharePage() {
           <div onClick={!canComment ? handleCommentAreaClick : undefined}>
             {canComment ? (
               <CommentInput
-                timestampSeconds={currentTime}
+                timestampSeconds={pendingCommentTimestamp ?? currentTime}
+                timestampOverrideSeconds={pendingCommentTimestamp}
                 showTimestamp
                 hotkeyTarget
                 onSubmitComment={handleSubmitComment}

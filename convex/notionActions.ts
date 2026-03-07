@@ -139,6 +139,33 @@ function parentMatchesDatabaseId(
   return false;
 }
 
+function normalizePropertyName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function findProofProperty(
+  properties: Record<string, NotionPageProperty>,
+): { name: string; property: NotionPageProperty } | null {
+  const directMatch = Object.entries(properties).find(([name]) => {
+    const normalized = normalizePropertyName(name);
+    return normalized === "proof";
+  });
+  if (directMatch) {
+    return { name: directMatch[0], property: directMatch[1] };
+  }
+
+  const containsProofMatch = Object.entries(properties).find(([name]) =>
+    normalizePropertyName(name).includes("proof"),
+  );
+  if (containsProofMatch) {
+    return { name: containsProofMatch[0], property: containsProofMatch[1] };
+  }
+
+  return null;
+}
+
 export const searchPagesForProject = action({
   args: {
     projectId: v.id("projects"),
@@ -438,10 +465,12 @@ export const syncProjectProofUrl = internalAction({
       }
 
       const page = (await pageResponse.json()) as { properties?: Record<string, NotionPageProperty> };
-      const proofProperty = page.properties?.["Proof?"];
-      if (!proofProperty) {
+      const properties = page.properties ?? {};
+      const proofPropertyEntry = findProofProperty(properties);
+      if (!proofPropertyEntry) {
         return { ok: false, skipped: true, reason: "proof_property_missing" };
       }
+      const { name: proofPropertyName, property: proofProperty } = proofPropertyEntry;
 
       const projectUrl = args.projectUrl.trim();
       if (!projectUrl) {
@@ -482,7 +511,7 @@ export const syncProjectProofUrl = internalAction({
         headers: notionHeaders(notionApiKey),
         body: JSON.stringify({
           properties: {
-            "Proof?": proofPatch,
+            [proofPropertyName]: proofPatch,
           },
         }),
       });

@@ -30,7 +30,7 @@ const STEPS = [
   },
   {
     icon: Pencil,
-    title: "Draw on Frame",
+    title: "Mark Frame",
     description: "Annotate directly on the video",
   },
   {

@@ -649,7 +649,7 @@ export default function ProjectPage({
                       {video.title}
                     </p>
                     {video.isFinalProof && (
-                      <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a]">
+                      <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a] dark:border-[#8a6334] dark:bg-[#4b3520] dark:text-[#f8e8c7]">
                         Final Proof
                       </span>
                     )}
@@ -747,7 +747,7 @@ export default function ProjectPage({
                     {video.title}
                   </p>
                   {video.isFinalProof && (
-                    <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a]">
+                    <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a] dark:border-[#8a6334] dark:bg-[#4b3520] dark:text-[#f8e8c7]">
                       Final Proof
                     </span>
                   )}
@@ -858,20 +858,20 @@ export default function ProjectPage({
       ) : null}
 
       <Dialog open={notionDialogOpen} onOpenChange={setNotionDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] w-[min(92vw,760px)] max-w-[760px] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Link Notion page</DialogTitle>
             <DialogDescription>
               Search your Notion pages or paste a page URL/ID.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-2 min-h-0">
             <Input
               placeholder="https://www.notion.so/... or page ID"
               value={notionInput}
               onChange={(event) => setNotionInput(event.target.value)}
             />
-            <div className="border-2 border-[#1a1a1a] bg-[#e8e8e0]">
+            <div className="min-h-0 border-2 border-[#1a1a1a] bg-[#e8e8e0]">
               <div className="border-b-2 border-[#1a1a1a] p-2">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-[#888]" />
@@ -884,7 +884,7 @@ export default function ProjectPage({
                   />
                 </div>
               </div>
-              <div className="max-h-52 overflow-y-auto">
+              <div className="max-h-[45vh] overflow-y-auto">
                 {isSearchingNotion ? (
                   <div className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-[#888]">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -958,7 +958,7 @@ export default function ProjectPage({
       </Dialog>
 
       {shareToast ? (
-        <div className="fixed right-4 top-4 z-50" aria-live="polite">
+        <div className="fixed right-4 top-24 z-50" aria-live="polite">
           <div
             className={cn(
               "border-2 px-3 py-2 text-sm font-bold shadow-[4px_4px_0px_0px_var(--shadow-color)]",

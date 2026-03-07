@@ -74,6 +74,8 @@ interface VideoPlayerProps {
   onRangeMarkerDrag?: (handle: "in" | "out", time: number) => void;
   /** Temporary in-point marker shown before out-point is selected. */
   pendingInPoint?: number;
+  /** Temporary marker shown when comment timestamp is locked via hotkey. */
+  pendingCommentPoint?: number;
   /** Cap auto-quality to this max height (e.g. 720 for guests). */
   maxQualityHeight?: number;
 }
@@ -85,6 +87,8 @@ export interface VideoPlayerHandle {
   play: () => void;
   pause: () => void;
   togglePlay: () => void;
+  setPlaybackRate: (rate: number) => void;
+  adjustPlaybackRate: (delta: number) => void;
 }
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
@@ -133,6 +137,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     rangeMarker,
     onRangeMarkerDrag,
     pendingInPoint,
+    pendingCommentPoint,
     maxQualityHeight,
   },
   ref
@@ -367,26 +372,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }, [pauseVideo, playVideo]);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      seekTo,
-      captureFrame,
-      captureFrameWithFallback,
-      play: playVideo,
-      pause: pauseVideo,
-      togglePlay: togglePlayback,
-    }),
-    [
-      captureFrame,
-      captureFrameWithFallback,
-      pauseVideo,
-      playVideo,
-      seekTo,
-      togglePlayback,
-    ],
-  );
-
   const handleSeekBy = useCallback(
     (delta: number) => {
       applyTime((videoRef.current?.currentTime ?? 0) + delta);
@@ -456,6 +441,45 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     video.playbackRate = nextRate;
     setPlaybackRate(nextRate);
   }, [showControls]);
+
+  const setPlaybackRateValue = useCallback((rate: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextRate = clamp(Math.round(rate * 4) / 4, 0.25, 3);
+    video.playbackRate = nextRate;
+    setPlaybackRate(nextRate);
+    showControls();
+  }, [showControls]);
+
+  const adjustPlaybackRateBy = useCallback((delta: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    setPlaybackRateValue(video.playbackRate + delta);
+  }, [setPlaybackRateValue]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      seekTo,
+      captureFrame,
+      captureFrameWithFallback,
+      play: playVideo,
+      pause: pauseVideo,
+      togglePlay: togglePlayback,
+      setPlaybackRate: setPlaybackRateValue,
+      adjustPlaybackRate: adjustPlaybackRateBy,
+    }),
+    [
+      adjustPlaybackRateBy,
+      captureFrame,
+      captureFrameWithFallback,
+      pauseVideo,
+      playVideo,
+      setPlaybackRateValue,
+      seekTo,
+      togglePlayback,
+    ],
+  );
 
   const toggleFullscreen = useCallback(async () => {
     const target = controlsBelow ? wrapperRef.current : containerRef.current;
@@ -1108,6 +1132,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           />
         )}
 
+        {pendingCommentPoint !== undefined && pendingCommentPoint !== null && duration > 0 && (
+          <div
+            className="absolute top-1/2 z-[14] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-[color:var(--accent)] shadow"
+            style={{ left: `${(pendingCommentPoint / duration) * 100}%` }}
+            title={`New comment timestamp: ${formatTimestamp(pendingCommentPoint)}`}
+          />
+        )}
+
         {/* Range bar for in/out comments */}
         {rangeMarker && duration > 0 && (
           <>
@@ -1492,9 +1524,24 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           }
         }}
         onKeyDown={(e) => {
-          if (e.key === " " || e.key.toLowerCase() === "k") {
+          if (e.key === " ") {
             e.preventDefault();
             togglePlayback();
+            return;
+          }
+          if (e.key.toLowerCase() === "j") {
+            e.preventDefault();
+            adjustPlaybackRateBy(-0.25);
+            return;
+          }
+          if (e.key.toLowerCase() === "l") {
+            e.preventDefault();
+            adjustPlaybackRateBy(0.25);
+            return;
+          }
+          if (e.key.toLowerCase() === "k") {
+            e.preventDefault();
+            setPlaybackRateValue(1);
             return;
           }
           if (e.shiftKey && e.key === "ArrowLeft") {
