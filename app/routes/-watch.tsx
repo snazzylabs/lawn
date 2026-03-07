@@ -789,15 +789,15 @@ export default function WatchPage() {
   return (
     <div className="h-[100dvh] flex flex-col bg-[#f0f0e8]">
       {/* Header */}
-      <header className="flex-shrink-0 bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-5 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <header className="flex-shrink-0 bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-3 md:px-5 py-2.5 md:py-3 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 md:gap-4">
           {video.projectPublicId ? (
             <a
               href={`/projects/${video.projectPublicId}?vp=${encodeURIComponent(publicId)}`}
               className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Project</span>
+              <span className="hidden lg:inline">Project</span>
             </a>
           ) : (
             <Link
@@ -808,13 +808,13 @@ export default function WatchPage() {
               Snazzy Labs
             </Link>
           )}
-          <div className="h-4 w-[2px] bg-[#1a1a1a]/20" />
-          <h1 className="text-base font-black truncate max-w-[150px] sm:max-w-[300px]">{video.title}</h1>
+          <div className="hidden md:block h-4 w-[2px] bg-[#1a1a1a]/20" />
+          <h1 className="text-base font-black truncate max-w-[120px] sm:max-w-[220px] lg:max-w-[300px]">{video.title}</h1>
           {video.workflowStatus && (
-            <VideoWorkflowStatusSteps status={video.workflowStatus} />
+            <VideoWorkflowStatusSteps status={video.workflowStatus} className="hidden lg:inline-flex" />
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-[#888]">
+        <div className="flex shrink-0 items-center gap-2 text-xs text-[#888]">
           {guest && !userId && (
             <div className="relative">
               <button
@@ -906,13 +906,13 @@ export default function WatchPage() {
             >
               {reviewSubmitted ? (
                 <>
-                  <span className="hidden sm:inline">Review Submitted ✓</span>
-                  <span className="sm:hidden">Submitted ✓</span>
+                  <span className="hidden lg:inline">Review Submitted ✓</span>
+                  <span className="lg:hidden">Submitted ✓</span>
                 </>
               ) : (
                 <>
-                  <span className="hidden sm:inline">Submit Review</span>
-                  <span className="sm:hidden">Submit</span>
+                  <span className="hidden lg:inline">Submit Review</span>
+                  <span className="lg:hidden">Submit</span>
                 </>
               )}
             </Button>

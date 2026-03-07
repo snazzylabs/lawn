@@ -667,7 +667,7 @@ export default function VideoPage() {
         }
       ]} teamId={context?.team._id} teamSlug={resolvedTeamSlug}>
         {/* Desktop: inline actions */}
-        <div className="hidden sm:flex items-center gap-3 text-xs text-[#888]">
+        <div className="hidden lg:flex items-center gap-3 text-xs text-[#888]">
           <span className="truncate max-w-[100px]">{video.uploaderName}</span>
           {video.duration && (
             <>
@@ -681,21 +681,22 @@ export default function VideoPage() {
           <VideoWorkflowStatusControl
             status={video.workflowStatus}
             size="lg"
+            className="px-2 lg:px-3"
             disabled={!canEdit}
             onChange={(workflowStatus) => {
               void handleUpdateWorkflowStatus(workflowStatus);
             }}
           />
           <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
-            <LinkIcon className="mr-1.5 h-4 w-4" />
-            Share
+            <LinkIcon className="h-4 w-4 lg:mr-1.5" />
+            <span className="hidden lg:inline">Share</span>
           </Button>
           {comments && comments.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
-                  <Download className="mr-1.5 h-4 w-4" />
-                  Export
+                  <Download className="h-4 w-4 lg:mr-1.5" />
+                  <span className="hidden lg:inline">Export</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">

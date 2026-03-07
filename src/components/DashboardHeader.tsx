@@ -131,9 +131,9 @@ export function DashboardHeader({
   );
 
   return (
-    <header className="flex-shrink-0 border-b-2 border-[#1a1a1a] bg-[#f0f0e8] grid grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center px-4 sm:px-6">
+    <header className="flex-shrink-0 border-b-2 border-[#1a1a1a] bg-[#f0f0e8] grid grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center px-3 md:px-4 lg:px-6">
       {/* Breadcrumb */}
-      <div className="flex items-center text-xl font-black tracking-tighter text-[#1a1a1a] min-w-0 h-11 sm:h-14">
+      <div className="flex items-center text-lg md:text-xl font-black tracking-tighter text-[#1a1a1a] min-w-0 h-11 sm:h-14">
         <Link
           to="/dashboard"
           preload="intent"
@@ -167,7 +167,7 @@ export function DashboardHeader({
       </div>
 
       {/* User controls — pinned top-right */}
-      <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-4 pl-4 border-l-2 border-[#1a1a1a]/10 h-8">
+      <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-2 sm:gap-3 pl-3 sm:pl-4 border-l-2 border-[#1a1a1a]/10 h-8">
         {teamId && teamSlug && <NotificationBell teamId={teamId} teamSlug={teamSlug} />}
         <ThemeToggleButton />
         {isSelfHosted ? (
@@ -196,7 +196,7 @@ export function DashboardHeader({
       {/* Children — second row on mobile, middle column on desktop */}
       {children && (
         <div className="col-span-full pb-2 sm:pb-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:h-14 sm:pl-4 min-w-0">
-          <div className="flex items-center gap-2 sm:gap-3 sm:justify-end min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-2 sm:gap-3 sm:justify-end min-w-0 overflow-x-auto md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {children}
           </div>
         </div>

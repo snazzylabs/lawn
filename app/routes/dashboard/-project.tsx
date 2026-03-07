@@ -438,7 +438,7 @@ export default function ProjectPage({
         { label: project?.name ?? "\u00A0" }
       ]} teamId={context?.team._id} teamSlug={resolvedTeamSlug}>
         <div className={cn(
-          "inline-flex min-w-max items-center gap-2 pr-1 transition-opacity duration-300 flex-shrink-0",
+          "inline-flex min-w-max lg:min-w-0 items-center gap-2 pr-1 transition-opacity duration-300 flex-shrink-0",
           isLoadingData ? "opacity-0" : "opacity-100"
         )}>
           {/* View toggle */}
@@ -473,7 +473,7 @@ export default function ProjectPage({
                 onClick={() => setProjectShareDialogOpen(true)}
               >
                 <Share2 className="h-3.5 w-3.5 sm:mr-1.5" />
-                <span className="hidden sm:inline">Share</span>
+                <span className="hidden lg:inline">Share</span>
               </Button>
               {notionPageUrl ? (
                 <>
@@ -482,7 +482,7 @@ export default function ProjectPage({
                     onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
                   >
                     <ExternalLink className="h-3.5 w-3.5 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Notion</span>
+                    <span className="hidden lg:inline">Notion</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -501,7 +501,7 @@ export default function ProjectPage({
                   onClick={() => setNotionDialogOpen(true)}
                 >
                   <ExternalLink className="h-3.5 w-3.5 sm:mr-1.5" />
-                  <span className="hidden sm:inline">Link Notion</span>
+                  <span className="hidden lg:inline">Link Notion</span>
                 </Button>
               )}
             </>
@@ -512,7 +512,7 @@ export default function ProjectPage({
               onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
             >
               <ExternalLink className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Notion</span>
+              <span className="hidden lg:inline">Notion</span>
             </Button>
           ) : null}
         </div>

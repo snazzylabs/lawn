@@ -871,15 +871,15 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-[#f0f0e8]">
-      <header className="bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+      <header className="bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-3 md:px-6 py-3 md:py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 px-0">
           {projectFolderHref ? (
             <a
               href={projectFolderHref}
               className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Project</span>
+              <span className="hidden lg:inline">Project</span>
             </a>
           ) : (
             <Link
@@ -890,7 +890,7 @@ export default function SharePage() {
               Snazzy Labs
             </Link>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {guest && !userId && (
               <div className="relative">
                 <button
@@ -976,13 +976,13 @@ export default function SharePage() {
                 >
                 {reviewSubmitted ? (
                   <>
-                    <span className="hidden sm:inline">Review Submitted ✓</span>
-                    <span className="sm:hidden">Submitted ✓</span>
+                    <span className="hidden lg:inline">Review Submitted ✓</span>
+                    <span className="lg:hidden">Submitted ✓</span>
                   </>
                 ) : (
                   <>
-                    <span className="hidden sm:inline">Submit Review</span>
-                    <span className="sm:hidden">Submit</span>
+                    <span className="hidden lg:inline">Submit Review</span>
+                    <span className="lg:hidden">Submit</span>
                   </>
                 )}
               </Button>
