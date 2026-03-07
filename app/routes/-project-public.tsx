@@ -19,6 +19,11 @@ export default function ProjectPublicPage() {
     const token = searchParams.get("st");
     return token && token.length > 0 ? token : null;
   }, [location.search]);
+  const videoGrantToken = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const token = searchParams.get("vg");
+    return token && token.length > 0 ? token : null;
+  }, [location.search]);
 
   const [grantToken, setGrantToken] = useState<string | null>(null);
   const [hasAttemptedAutoGrant, setHasAttemptedAutoGrant] = useState(false);
@@ -38,7 +43,11 @@ export default function ProjectPublicPage() {
     api.projects.getByPublicIdForShareGrant,
     shareToken && grantToken ? { publicId, grantToken } : "skip",
   );
-  const data = shareToken ? restrictedData : publicData;
+  const videoGrantData = useQuery(
+    api.projects.getByPublicIdForShareGrant,
+    videoGrantToken ? { publicId, videoGrantToken } : "skip",
+  );
+  const data = videoGrantToken ? videoGrantData : shareToken ? restrictedData : publicData;
 
   useEffect(() => {
     setGrantToken(null);
@@ -81,11 +90,12 @@ export default function ProjectPublicPage() {
   }, [acquireGrant, grantToken, hasAttemptedAutoGrant, shareInfo, shareToken]);
 
   const isBootstrappingRestricted =
-    Boolean(shareToken) &&
-    (shareInfo === undefined ||
-      (shareInfo?.status === "ok" &&
-        ((!grantToken && (!hasAttemptedAutoGrant || isRequestingGrant)) ||
-          (Boolean(grantToken) && restrictedData === undefined))));
+    (Boolean(shareToken) &&
+      (shareInfo === undefined ||
+        (shareInfo?.status === "ok" &&
+          ((!grantToken && (!hasAttemptedAutoGrant || isRequestingGrant)) ||
+            (Boolean(grantToken) && restrictedData === undefined))))) ||
+    (Boolean(videoGrantToken) && videoGrantData === undefined);
 
   if (isBootstrappingRestricted) {
     return (

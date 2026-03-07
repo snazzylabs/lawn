@@ -7,6 +7,7 @@ import { assertTeamHasActiveSubscription } from "./billingHelpers";
 import { purgeAndDeleteVideo } from "./videos";
 import { nanoid } from "nanoid";
 import { resolveActiveProjectShareGrant } from "./projectShareAccess";
+import { resolveActiveShareGrant } from "./shareAccess";
 
 const DEFAULT_PURGE_INACTIVITY_DAYS = 180;
 const DEFAULT_PURGE_LIMIT = 25;
@@ -545,15 +546,35 @@ export const getByPublicId = query({
 export const getByPublicIdForShareGrant = query({
   args: {
     publicId: v.string(),
-    grantToken: v.string(),
+    grantToken: v.optional(v.string()),
+    videoGrantToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const resolved = await resolveActiveProjectShareGrant(ctx, args.grantToken);
-    if (!resolved) {
+    let projectId: Id<"projects"> | null = null;
+
+    if (args.grantToken) {
+      const resolvedProjectGrant = await resolveActiveProjectShareGrant(ctx, args.grantToken);
+      if (!resolvedProjectGrant) {
+        return null;
+      }
+      projectId = resolvedProjectGrant.shareLink.projectId;
+    } else if (args.videoGrantToken) {
+      const resolvedVideoGrant = await resolveActiveShareGrant(ctx, args.videoGrantToken);
+      if (!resolvedVideoGrant) {
+        return null;
+      }
+      const video = await ctx.db.get(resolvedVideoGrant.shareLink.videoId);
+      if (!video) {
+        return null;
+      }
+      projectId = video.projectId;
+    }
+
+    if (!projectId) {
       return null;
     }
 
-    const project = await ctx.db.get(resolved.shareLink.projectId);
+    const project = await ctx.db.get(projectId);
     if (!project || project.publicId !== args.publicId) {
       return null;
     }

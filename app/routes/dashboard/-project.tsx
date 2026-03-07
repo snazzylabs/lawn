@@ -468,13 +468,13 @@ export default function ProjectPage({
           </div>
           {canUpload && (
             <>
+              <UploadButton onFilesSelected={handleFilesSelected} />
               <Button
                 onClick={() => setProjectShareDialogOpen(true)}
               >
                 <Share2 className="h-3.5 w-3.5 mr-1.5" />
-                Share Project
+                Share
               </Button>
-              <UploadButton onFilesSelected={handleFilesSelected} />
               {notionPageUrl ? (
                 <>
                   <Button
@@ -482,7 +482,7 @@ export default function ProjectPage({
                     onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
                   >
                     <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                    Open Notion
+                    Notion
                   </Button>
                   <Button
                     variant="outline"
@@ -512,7 +512,7 @@ export default function ProjectPage({
               onClick={() => window.open(notionPageUrl, "_blank", "noopener,noreferrer")}
             >
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-              Open Notion
+              Notion
             </Button>
           ) : null}
         </div>
@@ -651,7 +651,7 @@ export default function ProjectPage({
                       {video.title}
                     </p>
                     {video.isFinalProof && (
-                      <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a] dark:border-[#8a6334] dark:bg-[#4b3520] dark:text-[#f8e8c7]">
+                      <span className="mt-1 inline-flex items-center border-2 border-[color:var(--button-border)] bg-[color:var(--accent)]/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[color:var(--button-text)]">
                         Final Proof
                       </span>
                     )}
@@ -749,7 +749,7 @@ export default function ProjectPage({
                     {video.title}
                   </p>
                   {video.isFinalProof && (
-                    <span className="mt-1 inline-flex items-center border-2 border-[#1a1a1a] bg-[#fff3bf] px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#1a1a1a] dark:border-[#8a6334] dark:bg-[#4b3520] dark:text-[#f8e8c7]">
+                    <span className="mt-1 inline-flex items-center border-2 border-[color:var(--button-border)] bg-[color:var(--accent)]/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[color:var(--button-text)]">
                       Final Proof
                     </span>
                   )}

@@ -88,7 +88,7 @@
   --button-fill: #ffffff;
   --button-fill-hover: #f3f8ff;
   --button-text: #1a1a1a;
-  --button-border: #1a1a1a;
+  --button-border: #2c619c;
 
   /* Semantic colors */
   --destructive: #dc2626;
@@ -131,7 +131,7 @@
   --button-fill: #0f1410;
   --button-fill-hover: #161e17;
   --button-text: #e7ede4;
-  --button-border: #e7ede4;
+  --button-border: #7cb8f0;
 
   /* Semantic colors */
   --destructive: #f87171;
@@ -173,7 +173,7 @@
     --button-fill: #0f1410;
     --button-fill-hover: #161e17;
     --button-text: #e7ede4;
-    --button-border: #e7ede4;
+    --button-border: #7cb8f0;
 
     /* Semantic colors */
     --destructive: #f87171;

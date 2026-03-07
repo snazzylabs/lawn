@@ -11,15 +11,16 @@ import { CommentInput } from "@/components/comments/CommentInput";
 import { GuestOnboardingDialog } from "@/components/comments/GuestOnboardingDialog";
 import { useGuestIdentity } from "@/lib/useGuestIdentity";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatDuration, formatTimestamp, formatRelativeTime, getInitials } from "@/lib/utils";
+import { cn, formatDuration, formatTimestamp, formatRelativeTime, getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { AlertCircle, MessageSquare, X, Pencil, Trash2, CheckCircle2 } from "lucide-react";
+import { AlertCircle, MessageSquare, X, Pencil, Trash2, CheckCircle2, FolderOpen, UserRoundPen } from "lucide-react";
 import { HelpButton } from "@/components/HelpDialog";
 import { EmojiReactionPicker } from "@/components/comments/EmojiReactionPicker";
 import { CommentAttachments } from "@/components/comments/CommentAttachments";
 import { CommentDrawingThumbnail } from "@/components/comments/CommentDrawingThumbnail";
-import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowStatusControl";
+import { VideoWorkflowStatusSteps } from "@/components/videos/VideoWorkflowStatusSteps";
 import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compositeDrawing";
 import { resolveAttachmentContentType } from "@/lib/attachments";
 import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
@@ -75,6 +76,13 @@ export default function WatchPage() {
   const [editingText, setEditingText] = useState("");
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  const [isSubmitReviewFlashing, setIsSubmitReviewFlashing] = useState(false);
+  const [isEditingGuestIdentity, setIsEditingGuestIdentity] = useState(false);
+  const [guestNameDraft, setGuestNameDraft] = useState("");
+  const [guestCompanyDraft, setGuestCompanyDraft] = useState("");
+  const commentsPanelRef = useRef<HTMLDivElement | null>(null);
+  const wasNearEndRef = useRef(false);
   const submitReview = useMutation(api.reviewSubmissions.submit);
 
   // Auto-open onboarding for first-time guests
@@ -83,6 +91,24 @@ export default function WatchPage() {
       setShowOnboarding(true);
     }
   }, [isGuestReady, isUserLoaded, userId, guest]);
+
+  useEffect(() => {
+    if (!guest) return;
+    setGuestNameDraft(guest.name);
+    setGuestCompanyDraft(guest.company ?? "");
+  }, [guest?.guestId, guest?.name, guest?.company]);
+
+  useEffect(() => {
+    if (reviewSubmitted || !videoData?.video?.duration) return;
+    const nearEnd = currentTime >= Math.max(videoData.video.duration - 0.35, 0);
+    if (nearEnd && !wasNearEndRef.current) {
+      setIsSubmitReviewFlashing(true);
+      window.setTimeout(() => {
+        setIsSubmitReviewFlashing(false);
+      }, 2800);
+    }
+    wasNearEndRef.current = nearEnd;
+  }, [currentTime, reviewSubmitted, videoData?.video?.duration]);
 
   useEffect(() => {
     currentTimeRef.current = currentTime;
@@ -384,6 +410,38 @@ export default function WatchPage() {
       : "skip",
   );
 
+  const scrollToComment = useCallback((commentId: string) => {
+    const selector = `[data-comment-id="${commentId}"]`;
+    const target = commentsPanelRef.current?.querySelector(selector)
+      ?? document.querySelector(selector);
+    if (!(target instanceof HTMLElement)) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedCommentId(commentId);
+    window.setTimeout(() => {
+      setHighlightedCommentId((prev) => (prev === commentId ? null : prev));
+    }, 2400);
+  }, []);
+
+  const handleMarkerClick = useCallback((commentId: string) => {
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      setMobileCommentsOpen(true);
+      window.setTimeout(() => {
+        scrollToComment(commentId);
+      }, 120);
+      return;
+    }
+    scrollToComment(commentId);
+  }, [scrollToComment]);
+
+  const handleSaveGuestIdentity = useCallback(() => {
+    if (!guest || userId) return;
+    const nextName = guestNameDraft.trim();
+    const nextCompany = guestCompanyDraft.trim();
+    if (!nextName) return;
+    setGuestIdentity(nextName, nextCompany || undefined);
+    setIsEditingGuestIdentity(false);
+  }, [guest, guestCompanyDraft, guestNameDraft, setGuestIdentity, userId]);
+
   if (videoData === undefined) {
     return (
       <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center">
@@ -444,6 +502,7 @@ export default function WatchPage() {
         _id: string;
         userName: string;
         userAvatarUrl?: string;
+        userCompany?: string;
         text: string;
         timestampSeconds: number;
         resolved?: boolean;
@@ -469,7 +528,12 @@ export default function WatchPage() {
     return (
       <article
         key={comment._id}
-        className={`relative p-4 transition-colors hover:bg-[#1a1a1a]/5${comment.resolved ? " opacity-50" : ""}`}
+        data-comment-id={comment._id}
+        className={cn(
+          "relative p-4 transition-colors hover:bg-[#1a1a1a]/5",
+          comment.resolved && "opacity-50",
+          highlightedCommentId === comment._id && "bg-[color:var(--accent)]/12 opacity-100",
+        )}
       >
         <div className="flex items-start gap-2.5">
           <Avatar className="h-7 w-7 shrink-0">
@@ -478,10 +542,14 @@ export default function WatchPage() {
           </Avatar>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-bold text-[#1a1a1a] flex items-center gap-1.5">
-                {comment.userName}
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[#1a1a1a] truncate">
+                  {comment.userName}
+                </p>
                 {comment.userCompany && (
-                  <span className="text-xs font-normal italic text-[#888] ml-1">· {comment.userCompany}</span>
+                  <p className="text-[11px] font-normal italic text-[#888] truncate">
+                    {comment.userCompany}
+                  </p>
                 )}
                 {comment.resolved && (
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#888] ml-1">Resolved</span>
@@ -565,13 +633,15 @@ export default function WatchPage() {
             <div className="flex items-center gap-3 mt-1">
               <p className="text-[11px] text-[#888]">{formatRelativeTime(comment._creationTime)}</p>
               {canComment && (
-                <button
+                <Button
                   type="button"
-                  className="text-[11px] font-bold text-[#888] hover:text-[#2F6DB4]"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] tracking-[0.08em]"
                   onClick={() => setReplyingToCommentId(replyingToCommentId === comment._id ? null : comment._id)}
                 >
                   Reply
-                </button>
+                </Button>
               )}
             </div>
             {userIdentifier && userName && (
@@ -592,7 +662,12 @@ export default function WatchPage() {
             {comment.replies.map((reply) => (
               <div
                 key={reply._id}
-                className={`text-sm flex items-start gap-2${comment.resolved || reply.resolved ? " opacity-50" : ""}`}
+                data-comment-id={reply._id}
+                className={cn(
+                  "text-sm flex items-start gap-2 rounded px-1 py-0.5",
+                  (comment.resolved || reply.resolved) && "opacity-50",
+                  highlightedCommentId === reply._id && "bg-[color:var(--accent)]/12 opacity-100",
+                )}
               >
                 <Avatar className="h-6 w-6 shrink-0">
                   <AvatarImage src={reply.userAvatarUrl} />
@@ -600,14 +675,19 @@ export default function WatchPage() {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-[#1a1a1a]">
-                      {reply.userName}
+                    <div className="min-w-0">
+                      <p className="font-bold text-[#1a1a1a] truncate">{reply.userName}</p>
+                      {reply.userCompany && (
+                        <p className="text-[11px] font-normal italic text-[#888] truncate">
+                          {reply.userCompany}
+                        </p>
+                      )}
                       {(comment.resolved || reply.resolved) && (
-                        <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-[#888]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#888]">
                           Resolved
                         </span>
                       )}
-                    </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       {reply.isGuestOwned && editingCommentId !== reply._id && (
                         <>
@@ -718,7 +798,7 @@ export default function WatchPage() {
         <button
           type="button"
           onClick={handleCommentAreaClick}
-          className="w-full text-left px-4 py-4 text-sm border-2 border-dashed border-[#2F6DB4] bg-[#2F6DB4]/5 text-[#2F6DB4] font-bold transition-colors hover:bg-[#2F6DB4]/10"
+          className="w-full border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-4 py-3 text-left text-sm font-bold text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
         >
           Click to leave feedback...
         </button>
@@ -729,26 +809,88 @@ export default function WatchPage() {
   return (
     <div className="h-[100dvh] flex flex-col bg-[#f0f0e8]">
       {/* Header */}
-      <header className="flex-shrink-0 bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-5 py-3 flex items-center justify-between">
+      <header className="flex-shrink-0 bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-5 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link
-            preload="intent"
-            to="/"
-            className="text-[#888] hover:text-[#1a1a1a] text-sm flex items-center gap-2 font-bold"
-          >
-            Snazzy Labs
-          </Link>
+          {video.projectPublicId ? (
+            <a
+              href={`/projects/${video.projectPublicId}`}
+              className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              Project
+            </a>
+          ) : (
+            <Link
+              preload="intent"
+              to="/"
+              className="text-[#888] hover:text-[#1a1a1a] text-sm flex items-center gap-2 font-bold"
+            >
+              Snazzy Labs
+            </Link>
+          )}
           <div className="h-4 w-[2px] bg-[#1a1a1a]/20" />
           <h1 className="text-base font-black truncate max-w-[150px] sm:max-w-[300px]">{video.title}</h1>
           {video.workflowStatus && (
-            <VideoWorkflowStatusControl status={video.workflowStatus} onChange={() => {}} disabled />
+            <VideoWorkflowStatusSteps status={video.workflowStatus} />
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-[#888]">
+        <div className="flex items-center gap-2 text-xs text-[#888]">
           {guest && !userId && (
-            <span className="text-[11px] font-medium text-[#888]">
-              {guest.name}{guest.company ? ` · ${guest.company}` : ""}
-            </span>
+            <div className="relative">
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-2 text-[11px] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
+                onClick={() => setIsEditingGuestIdentity((prev) => !prev)}
+                title="Edit reviewer name"
+              >
+                <span className="flex flex-col items-start leading-tight">
+                  <span className="font-bold">{guest.name}</span>
+                  {guest.company && (
+                    <span className="text-[10px] italic text-[#888]">{guest.company}</span>
+                  )}
+                </span>
+                <UserRoundPen className="h-3 w-3" />
+              </button>
+              {isEditingGuestIdentity && (
+                <div className="absolute right-0 top-full z-40 mt-2 w-64 border-2 border-[color:var(--button-border)] bg-[color:var(--background)] p-2 shadow-[4px_4px_0px_0px_var(--shadow-accent)]">
+                  <div className="space-y-2">
+                    <Input
+                      value={guestNameDraft}
+                      onChange={(event) => setGuestNameDraft(event.target.value)}
+                      placeholder="Name"
+                      className="h-8 text-xs"
+                      autoFocus
+                    />
+                    <Input
+                      value={guestCompanyDraft}
+                      onChange={(event) => setGuestCompanyDraft(event.target.value)}
+                      placeholder="Company (optional)"
+                      className="h-8 text-xs"
+                    />
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[10px]"
+                        onClick={() => setIsEditingGuestIdentity(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 px-2 text-[10px]"
+                        onClick={handleSaveGuestIdentity}
+                        disabled={!guestNameDraft.trim()}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           {video.duration && (
             <>
@@ -761,7 +903,10 @@ export default function WatchPage() {
           {canComment && (
             <Button
               size="sm"
-              className="h-8"
+              className={cn(
+                "h-8",
+                isSubmitReviewFlashing && !reviewSubmitted && "animate-pulse ring-2 ring-[color:var(--accent)] ring-offset-2 ring-offset-[color:var(--background)]",
+              )}
               disabled={reviewSubmitted}
               onClick={async () => {
                 if (!video?._id) return;
@@ -840,6 +985,7 @@ export default function WatchPage() {
                 spriteVttUrl={playbackSession.spriteVttUrl}
                 comments={flattenedComments}
                 onTimeUpdate={setCurrentTime}
+                onMarkerClick={(comment) => handleMarkerClick(comment._id)}
                 allowDownload={false}
                 controlsBelow
                 rangeMarker={rangeMarker ?? undefined}
@@ -899,7 +1045,7 @@ export default function WatchPage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div ref={commentsPanelRef} className="flex-1 overflow-y-auto">
             {comments === undefined ? (
               <p className="p-4 text-sm text-[#888]">Loading comments...</p>
             ) : comments.length === 0 ? (
@@ -939,7 +1085,7 @@ export default function WatchPage() {
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div ref={commentsPanelRef} className="flex-1 overflow-y-auto">
             {comments === undefined ? (
               <p className="p-4 text-sm text-[#888]">Loading comments...</p>
             ) : comments.length === 0 ? (

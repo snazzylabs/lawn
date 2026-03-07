@@ -263,6 +263,7 @@ export const getByPublicId = query({
     if (!video || video.visibility !== "public" || video.status !== "ready") {
       return null;
     }
+    const project = await ctx.db.get(video.projectId);
 
     return {
       video: {
@@ -282,6 +283,7 @@ export const getByPublicId = query({
         isFinalProof: video.isFinalProof ?? false,
         finalCutApprovedAt: video.finalCutApprovedAt,
         finalCutApprovedByName: video.finalCutApprovedByName,
+        projectPublicId: project?.publicId,
       },
     };
   },
@@ -317,6 +319,7 @@ export const getByShareGrant = query({
     if (!video || video.status !== "ready") {
       return null;
     }
+    const project = await ctx.db.get(video.projectId);
 
     return {
       video: {
@@ -336,6 +339,7 @@ export const getByShareGrant = query({
         isFinalProof: video.isFinalProof ?? false,
         finalCutApprovedAt: video.finalCutApprovedAt,
         finalCutApprovedByName: video.finalCutApprovedByName,
+        projectPublicId: project?.publicId,
       },
       grantExpiresAt: resolved.grant.expiresAt,
     };

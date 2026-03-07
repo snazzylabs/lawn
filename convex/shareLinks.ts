@@ -1,5 +1,6 @@
 import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
+import { nanoid } from "nanoid";
 import { components } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, MutationCtx } from "./_generated/server";
@@ -240,40 +241,41 @@ export const issueAccessGrant = mutation({
   returns: v.object({
     ok: v.boolean(),
     grantToken: v.union(v.string(), v.null()),
+    projectPublicId: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
     const globalAccessLimit = await shareLinkRateLimiter.limit(ctx, "grantGlobal");
     if (!globalAccessLimit.ok) {
-      return { ok: false, grantToken: null };
+      return { ok: false, grantToken: null, projectPublicId: null };
     }
 
     const accessLimit = await shareLinkRateLimiter.limit(ctx, "grantByToken", {
       key: args.token,
     });
     if (!accessLimit.ok) {
-      return { ok: false, grantToken: null };
+      return { ok: false, grantToken: null, projectPublicId: null };
     }
 
     const link = await findShareLinkByToken(ctx, args.token);
 
     if (!link) {
-      return { ok: false, grantToken: null };
+      return { ok: false, grantToken: null, projectPublicId: null };
     }
 
     const now = Date.now();
 
     if (link.expiresAt && link.expiresAt <= now) {
-      return { ok: false, grantToken: null };
+      return { ok: false, grantToken: null, projectPublicId: null };
     }
 
     const video = await ctx.db.get(link.videoId);
     if (!video || video.status !== "ready") {
-      return { ok: false, grantToken: null };
+      return { ok: false, grantToken: null, projectPublicId: null };
     }
 
     if (hasPasswordProtection(link)) {
       if (link.lockedUntil && link.lockedUntil > now) {
-        return { ok: false, grantToken: null };
+        return { ok: false, grantToken: null, projectPublicId: null };
       }
 
       const password = args.password ?? "";
@@ -299,7 +301,7 @@ export const issueAccessGrant = mutation({
         }
 
         await ctx.db.patch(link._id, updates);
-        return { ok: false, grantToken: null };
+        return { ok: false, grantToken: null, projectPublicId: null };
       }
 
       const successUpdates: Partial<Doc<"shareLinks">> = {};
@@ -321,6 +323,13 @@ export const issueAccessGrant = mutation({
 
     const grantToken = await issueShareAccessGrant(ctx, link._id);
 
+    const project = await ctx.db.get(video.projectId);
+    let projectPublicId: string | null = project?.publicId ?? null;
+    if (project && !projectPublicId) {
+      projectPublicId = nanoid(12);
+      await ctx.db.patch(project._id, { publicId: projectPublicId });
+    }
+
     await ctx.db.patch(link._id, {
       viewCount: link.viewCount + 1,
     });
@@ -328,6 +337,7 @@ export const issueAccessGrant = mutation({
     return {
       ok: true,
       grantToken,
+      projectPublicId,
     };
   },
 });

@@ -19,9 +19,9 @@ const buttonVariants = cva(
         secondary:
           "bg-[color:var(--button-fill)] text-[color:var(--button-text)] hover:bg-[color:var(--button-fill-hover)] border-2 border-[color:var(--button-border)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]",
         ghost:
-          "text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f0f0e8] border-2 border-transparent hover:border-[#1a1a1a] hover:shadow-[4px_4px_0px_0px_var(--shadow-accent)] hover:-translate-y-[2px] hover:-translate-x-[2px]",
+          "text-[color:var(--button-text)] hover:bg-[color:var(--button-fill)] hover:text-[color:var(--button-text)] border-2 border-transparent hover:border-[color:var(--button-border)] hover:shadow-[4px_4px_0px_0px_var(--shadow-accent)] hover:-translate-y-[2px] hover:-translate-x-[2px]",
         link:
-          "text-[#1a1a1a] underline underline-offset-4 hover:text-[#2F6DB4]",
+          "text-[color:var(--button-text)] underline underline-offset-4 hover:text-[color:var(--accent)]",
       },
       size: {
         default: "h-10 px-5 py-2",

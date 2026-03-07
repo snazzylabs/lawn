@@ -342,14 +342,16 @@ export function CommentItem({
                   {formatRelativeTime(comment._creationTime)}
                 </p>
                 {!isReply && (
-                  <button
+                  <Button
                     type="button"
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#2F6DB4] hover:text-[#1a1a1a]"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 gap-1 px-2 text-[10px] tracking-[0.08em]"
                     onClick={() => setIsReplying((prev) => !prev)}
                   >
                     <Reply className="h-3 w-3" />
                     Reply
-                  </button>
+                  </Button>
                 )}
               </div>
               {currentUserIdentifier && currentUserName && (
