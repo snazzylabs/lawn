@@ -34,6 +34,7 @@ import {
   Eye,
   Share2,
   ExternalLink,
+  RotateCcw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -164,6 +165,7 @@ export default function ProjectPage({
   const deleteVideo = useMutation(api.videos.remove);
   const updateVideo = useMutation(api.videos.update);
   const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
+  const undoFinalCutApproval = useMutation(api.videos.undoFinalCutApproval);
   const setProjectNotionPage = useMutation(api.projects.setNotionPage);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
   const searchNotionPages = useAction(api.notionActions.searchPagesForProject);
@@ -315,6 +317,18 @@ export default function ProjectPage({
       }
     },
     [updateVideoWorkflowStatus],
+  );
+
+  const handleUndoConfirmedDelivery = useCallback(
+    async (videoId: Id<"videos">) => {
+      if (!confirm("Undo confirmed delivery and move this proof back to Revised?")) return;
+      try {
+        await undoFinalCutApproval({ videoId });
+      } catch (error) {
+        console.error("Failed to undo confirmed delivery:", error);
+      }
+    },
+    [undoFinalCutApproval],
   );
 
   const showShareToast = useCallback((tone: ShareToastState["tone"], message: string) => {
@@ -630,6 +644,17 @@ export default function ProjectPage({
                             <LinkIcon className="mr-2 h-4 w-4" />
                             Share
                           </DropdownMenuItem>
+                          {video.finalCutApprovedAt && canUpload && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleUndoConfirmedDelivery(video._id);
+                              }}
+                            >
+                              <RotateCcw className="mr-2 h-4 w-4" />
+                              Undo Confirmed Delivery
+                            </DropdownMenuItem>
+                          )}
                           {canUpload && (
                             <DropdownMenuItem
                               className="text-[#dc2626] focus:text-[#dc2626]"
@@ -829,6 +854,17 @@ export default function ProjectPage({
                         <LinkIcon className="mr-2 h-4 w-4" />
                         Share
                       </DropdownMenuItem>
+                      {video.finalCutApprovedAt && canUpload && (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleUndoConfirmedDelivery(video._id);
+                          }}
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" />
+                          Undo Confirmed Delivery
+                        </DropdownMenuItem>
+                      )}
                       {canUpload && (
                         <DropdownMenuItem
                           className="text-[#dc2626] focus:text-[#dc2626]"

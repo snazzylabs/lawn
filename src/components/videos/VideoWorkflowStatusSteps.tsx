@@ -23,7 +23,9 @@ export function VideoWorkflowStatusSteps({ status, className }: VideoWorkflowSta
             className={cn(
               "inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] border",
               isActive
-                ? "border-[color:var(--button-border)] bg-[color:var(--accent)]/20 text-[color:var(--button-text)]"
+                ? option.value === "approved"
+                  ? "border-[#15803d] bg-[#16a34a]/20 text-[#14532d] dark:text-[#bbf7d0]"
+                  : "border-[color:var(--button-border)] bg-[color:var(--accent)]/20 text-[color:var(--button-text)]"
                 : "border-transparent text-[color:var(--foreground-muted)]",
             )}
           >

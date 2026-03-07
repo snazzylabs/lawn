@@ -26,6 +26,7 @@ import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compo
 import { resolveAttachmentContentType } from "@/lib/attachments";
 import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
 import { PublicThemeToggleButton } from "@/components/theme/PublicThemeToggleButton";
+import { ConfettiBurst } from "@/components/effects/ConfettiBurst";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -83,6 +84,7 @@ export default function SharePage() {
   const [isEditingGuestIdentity, setIsEditingGuestIdentity] = useState(false);
   const [guestNameDraft, setGuestNameDraft] = useState("");
   const [guestCompanyDraft, setGuestCompanyDraft] = useState("");
+  const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const commentsPanelRef = useRef<HTMLDivElement | null>(null);
   const wasNearEndRef = useRef(false);
   const [projectPublicIdFromGrant, setProjectPublicIdFromGrant] = useState<string | null>(null);
@@ -445,11 +447,14 @@ export default function SharePage() {
     }
     setIsApprovingFinalCut(true);
     try {
-      await approveFinalCut({
+      const result = await approveFinalCut({
         grantToken,
         approvedByName: guest?.name ?? "Client",
         approvedByCompany: guest?.company,
       });
+      if (!result?.alreadyApproved) {
+        setConfettiBurstKey((prev) => prev + 1);
+      }
     } catch (error) {
       console.error("Failed to approve final cut:", error);
     } finally {
@@ -871,6 +876,7 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-[#f0f0e8]">
+      <ConfettiBurst triggerKey={confettiBurstKey} />
       <header className="bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-3 md:px-6 py-3 md:py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 px-0">
           {projectFolderHref ? (
@@ -996,13 +1002,13 @@ export default function SharePage() {
       </header>
 
       {video.isFinalProof && (
-        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-6 py-3 dark:border-[#8a6334] dark:bg-[#4b3520]">
+        <div className="border-b-2 border-[#8fb3da] bg-[#edf5ff] px-6 py-3 dark:border-[#35527a] dark:bg-[#152338]">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a] dark:text-[#f8e8c7]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#123a63] dark:text-[#dcecff]">
                 Final Proof
               </p>
-              <p className="text-sm text-[#1a1a1a] dark:text-[#f3e6c7]">
+              <p className="text-sm text-[#123a63] dark:text-[#dcecff]">
                 {video.finalCutApprovedAt
                   ? `Approved by ${video.finalCutApprovedByName ?? "client"} and ready for publishing.`
                   : "We hope you like our changes! Approve to notify team for publishing."}

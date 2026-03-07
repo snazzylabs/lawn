@@ -24,6 +24,7 @@ import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compo
 import { resolveAttachmentContentType } from "@/lib/attachments";
 import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
 import { PublicThemeToggleButton } from "@/components/theme/PublicThemeToggleButton";
+import { ConfettiBurst } from "@/components/effects/ConfettiBurst";
 import { useWatchData } from "./-watch.data";
 
 export default function WatchPage() {
@@ -78,6 +79,7 @@ export default function WatchPage() {
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const [isSubmitReviewFlashing, setIsSubmitReviewFlashing] = useState(false);
   const [isEditingGuestIdentity, setIsEditingGuestIdentity] = useState(false);
+  const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const [guestNameDraft, setGuestNameDraft] = useState("");
   const [guestCompanyDraft, setGuestCompanyDraft] = useState("");
   const commentsPanelRef = useRef<HTMLDivElement | null>(null);
@@ -390,11 +392,14 @@ export default function WatchPage() {
     }
     setIsApprovingFinalCut(true);
     try {
-      await approveFinalCut({
+      const result = await approveFinalCut({
         publicId,
         approvedByName: guest?.name ?? "Client",
         approvedByCompany: guest?.company,
       });
+      if (!result?.alreadyApproved) {
+        setConfettiBurstKey((prev) => prev + 1);
+      }
     } catch (error) {
       console.error("Failed to approve final cut:", error);
     } finally {
@@ -788,6 +793,7 @@ export default function WatchPage() {
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#f0f0e8]">
+      <ConfettiBurst triggerKey={confettiBurstKey} />
       {/* Header */}
       <header className="flex-shrink-0 bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-3 md:px-5 py-2.5 md:py-3 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2 md:gap-4">
@@ -930,13 +936,13 @@ export default function WatchPage() {
       </header>
 
       {video.isFinalProof && (
-        <div className="border-b-2 border-[#1a1a1a] bg-[#fff3bf] px-5 py-3 dark:border-[#8a6334] dark:bg-[#4b3520] sm:px-6">
+        <div className="border-b-2 border-[#8fb3da] bg-[#edf5ff] px-5 py-3 dark:border-[#35527a] dark:bg-[#152338] sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1a1a1a] dark:text-[#f8e8c7]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#123a63] dark:text-[#dcecff]">
                 Final Proof
               </p>
-              <p className="text-sm text-[#1a1a1a] dark:text-[#f3e6c7]">
+              <p className="text-sm text-[#123a63] dark:text-[#dcecff]">
                 {video.finalCutApprovedAt
                   ? `Approved by ${video.finalCutApprovedByName ?? "client"} and ready for publishing.`
                   : "We hope you like our changes! Approve to notify team for publishing."}

@@ -113,6 +113,7 @@ export default defineSchema({
       v.literal("review"),
       v.literal("rework"),
       v.literal("done"),
+      v.literal("approved"),
     ),
     isFinalProof: v.optional(v.boolean()),
     finalCutApprovedAt: v.optional(v.number()),

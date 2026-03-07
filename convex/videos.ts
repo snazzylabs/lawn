@@ -11,6 +11,7 @@ const workflowStatusValidator = v.union(
   v.literal("review"),
   v.literal("rework"),
   v.literal("done"),
+  v.literal("approved"),
 );
 
 const visibilityValidator = v.union(v.literal("public"), v.literal("private"));
@@ -18,7 +19,8 @@ const visibilityValidator = v.union(v.literal("public"), v.literal("private"));
 type WorkflowStatus =
   | "review"
   | "rework"
-  | "done";
+  | "done"
+  | "approved";
 
 function formatApproverName(
   name: string,
@@ -87,7 +89,7 @@ async function approveFinalCutInternal(
   const now = Date.now();
   const approver = args.approverName.trim() || "Someone";
   await ctx.db.patch(video._id, {
-    workflowStatus: "done",
+    workflowStatus: "approved",
     finalCutApprovedAt: now,
     finalCutApprovedByName: approver,
   });
@@ -109,7 +111,11 @@ async function approveFinalCutInternal(
   };
 }
 
-function normalizeWorkflowStatus(status: WorkflowStatus | undefined): WorkflowStatus {
+function normalizeWorkflowStatus(
+  status: WorkflowStatus | undefined,
+  finalCutApprovedAt?: number,
+): WorkflowStatus {
+  if (finalCutApprovedAt) return "approved";
   return status ?? "review";
 }
 
@@ -183,7 +189,8 @@ export const create = mutation({
       if (
         existingVideo._id !== videoId &&
         existingVideo.status === "ready" &&
-        existingVideo.workflowStatus !== "done"
+        existingVideo.workflowStatus !== "done" &&
+        existingVideo.workflowStatus !== "approved"
       ) {
         await ctx.db.patch(existingVideo._id, { workflowStatus: "done" });
       }
@@ -225,7 +232,10 @@ export const list = query({
         return {
           ...video,
           uploaderName: video.uploaderName ?? "Unknown",
-          workflowStatus: normalizeWorkflowStatus(video.workflowStatus),
+          workflowStatus: normalizeWorkflowStatus(
+            video.workflowStatus,
+            video.finalCutApprovedAt,
+          ),
           isFinalProof: video.isFinalProof ?? false,
           commentCount: comments.length,
         };
@@ -241,7 +251,10 @@ export const get = query({
     return {
       ...video,
       uploaderName: video.uploaderName ?? "Unknown",
-      workflowStatus: normalizeWorkflowStatus(video.workflowStatus),
+      workflowStatus: normalizeWorkflowStatus(
+        video.workflowStatus,
+        video.finalCutApprovedAt,
+      ),
       role: membership.role,
       isFinalProof: video.isFinalProof ?? false,
     };
@@ -293,7 +306,10 @@ export const getByPublicId = query({
         spriteVttKey: video.spriteVttKey,
         contentType: video.contentType,
         s3Key: video.s3Key,
-        workflowStatus: video.workflowStatus,
+        workflowStatus: normalizeWorkflowStatus(
+          video.workflowStatus,
+          video.finalCutApprovedAt,
+        ),
         isFinalProof: video.isFinalProof ?? false,
         finalCutApprovedAt: video.finalCutApprovedAt,
         finalCutApprovedByName: video.finalCutApprovedByName,
@@ -349,7 +365,10 @@ export const getByShareGrant = query({
         spriteVttKey: video.spriteVttKey,
         contentType: video.contentType,
         s3Key: video.s3Key,
-        workflowStatus: video.workflowStatus,
+        workflowStatus: normalizeWorkflowStatus(
+          video.workflowStatus,
+          video.finalCutApprovedAt,
+        ),
         isFinalProof: video.isFinalProof ?? false,
         finalCutApprovedAt: video.finalCutApprovedAt,
         finalCutApprovedByName: video.finalCutApprovedByName,
@@ -416,11 +435,21 @@ export const updateWorkflowStatus = mutation({
     workflowStatus: workflowStatusValidator,
   },
   handler: async (ctx, args) => {
-    const { video } = await requireVideoAccess(ctx, args.videoId, "member");
-
-    await ctx.db.patch(args.videoId, {
-      workflowStatus: args.workflowStatus,
-    });
+    const { user, video } = await requireVideoAccess(ctx, args.videoId, "member");
+    const nextStatus = args.workflowStatus;
+    if (nextStatus === "approved") {
+      await ctx.db.patch(args.videoId, {
+        workflowStatus: "approved",
+        finalCutApprovedAt: video.finalCutApprovedAt ?? Date.now(),
+        finalCutApprovedByName: video.finalCutApprovedByName ?? identityName(user),
+      });
+    } else {
+      await ctx.db.patch(args.videoId, {
+        workflowStatus: nextStatus,
+        finalCutApprovedAt: undefined,
+        finalCutApprovedByName: undefined,
+      });
+    }
     await touchProjectActivity(ctx, video.projectId);
   },
 });
@@ -487,6 +516,26 @@ export const approveFinalCutForShareGrant = mutation({
       approverName,
       approverCompany: args.approvedByCompany,
     });
+  },
+});
+
+export const undoFinalCutApproval = mutation({
+  args: {
+    videoId: v.id("videos"),
+  },
+  handler: async (ctx, args) => {
+    const { video } = await requireVideoAccess(ctx, args.videoId, "admin");
+    if (!video.isFinalProof || !video.finalCutApprovedAt) {
+      return { ok: true, alreadyUndone: true };
+    }
+
+    await ctx.db.patch(args.videoId, {
+      workflowStatus: "done",
+      finalCutApprovedAt: undefined,
+      finalCutApprovedByName: undefined,
+    });
+    await touchProjectActivity(ctx, video.projectId);
+    return { ok: true, alreadyUndone: false };
   },
 });
 

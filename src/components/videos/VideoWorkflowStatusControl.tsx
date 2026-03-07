@@ -12,7 +12,8 @@ import { ChevronDown } from "lucide-react";
 export type VideoWorkflowStatus =
   | "review"
   | "rework"
-  | "done";
+  | "done"
+  | "approved";
 
 export const VIDEO_WORKFLOW_STATUS_OPTIONS: Array<{
   value: VideoWorkflowStatus;
@@ -21,6 +22,7 @@ export const VIDEO_WORKFLOW_STATUS_OPTIONS: Array<{
   { value: "review", label: "Review" },
   { value: "rework", label: "Rework" },
   { value: "done", label: "Revised" },
+  { value: "approved", label: "Approved" },
 ];
 
 function workflowStatusLabel(status: VideoWorkflowStatus) {
@@ -29,6 +31,7 @@ function workflowStatusLabel(status: VideoWorkflowStatus) {
 }
 
 function workflowStatusDotColor(status: VideoWorkflowStatus) {
+  if (status === "approved") return "bg-[#16a34a]";
   if (status === "done") return "bg-[#2F6DB4]";
   if (status === "rework") return "bg-[#ca8a04]";
   return "bg-[#888]";

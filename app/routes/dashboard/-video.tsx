@@ -45,6 +45,7 @@ import {
 import { Id } from "@convex/_generated/dataModel";
 import { projectPath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
+import { ConfettiBurst } from "@/components/effects/ConfettiBurst";
 import { prewarmProject } from "./-project.data";
 import { useVideoData } from "./-video.data";
 
@@ -113,6 +114,7 @@ export default function VideoPage() {
   const pendingInTimeRef = useRef<number | null>(null);
   const dragDepthRef = useRef(0);
   const [isFileDragActive, setIsFileDragActive] = useState(false);
+  const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const canComment = true;
 
   useEffect(() => {
@@ -564,7 +566,10 @@ export default function VideoPage() {
     if (!resolvedVideoId || isApprovingFinalCut) return;
     setIsApprovingFinalCut(true);
     try {
-      await approveFinalCut({ videoId: resolvedVideoId });
+      const result = await approveFinalCut({ videoId: resolvedVideoId });
+      if (!result?.alreadyApproved) {
+        setConfettiBurstKey((prev) => prev + 1);
+      }
     } catch (error) {
       console.error("Failed to approve final cut:", error);
     } finally {
@@ -599,6 +604,7 @@ export default function VideoPage() {
 
   return (
     <div className="h-full flex flex-col">
+      <ConfettiBurst triggerKey={confettiBurstKey} />
       {/* Header */}
       <DashboardHeader paths={[
         {
@@ -758,23 +764,23 @@ export default function VideoPage() {
       </DashboardHeader>
 
       {video.isFinalProof && (
-        <div className="border-b border-amber-700/35 bg-amber-100 px-4 py-3 text-amber-950 dark:border-[#8a6334] dark:bg-[#4b3520] dark:text-[#f3e6c7] sm:px-6">
+        <div className="border-b border-[#8fb3da] bg-[#edf5ff] px-4 py-3 text-[#123a63] dark:border-[#35527a] dark:bg-[#152338] dark:text-[#dcecff] sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-900 dark:text-[#f8e8c7]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#123a63] dark:text-[#dcecff]">
                 Final Proof
               </p>
-              <p className="text-sm text-amber-900/90 dark:text-[#f3e6c7]/95">
+              <p className="text-sm text-[#123a63] dark:text-[#dcecff]">
                 {video.finalCutApprovedAt
                   ? `Approved by ${video.finalCutApprovedByName ?? "team"} and ready for publishing.`
                   : "We hope you like our changes! Approve to notify team for publishing."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {!isDiscussionVisible && (
+              {!video.finalCutApprovedAt && !isDiscussionVisible && (
                 <Button
                   variant="outline"
-                  className="h-11 border border-amber-900/35 bg-white/85 px-5 text-sm font-black uppercase tracking-wide text-amber-900 hover:bg-white dark:border-[#d3b184] dark:bg-[#3b2918] dark:text-[#f8e8c7] dark:hover:bg-[#493422]"
+                  className="h-11 border border-[#8fb3da] bg-white/90 px-5 text-sm font-black uppercase tracking-wide text-[#123a63] hover:bg-white dark:border-[#35527a] dark:bg-[#203551] dark:text-[#dcecff] dark:hover:bg-[#2a4264]"
                   onClick={() => setShowDiscussionForFinalCut(true)}
                 >
                   Edits Required
