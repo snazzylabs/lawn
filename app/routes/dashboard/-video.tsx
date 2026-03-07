@@ -667,7 +667,6 @@ export default function VideoPage() {
       ]} teamId={context?.team._id} teamSlug={resolvedTeamSlug}>
         {/* Desktop: inline actions */}
         <div className="hidden lg:flex items-center gap-3 text-xs text-[#888]">
-          <span className="truncate max-w-[100px]">{video.uploaderName}</span>
           <VideoWatchers watchers={watchers} />
         </div>
         <div className="hidden sm:flex items-center gap-2 flex-shrink-0 border-l-2 border-[#1a1a1a]/20 pl-3 ml-1">
