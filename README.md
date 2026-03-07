@@ -15,6 +15,24 @@ Snazzy Labs' internal and client-facing video proofing app, built on top of [Jak
   - Link a project to a Notion page from the project dashboard
   - Post throttled client-comment alerts to that Notion page
 
+## Recent Updates
+
+- New-comment hotkey (`N`) now locks timestamp at keypress and shows a pending timeline marker
+- Viewer hotkeys expanded:
+  - `M` enters mark mode and pauses playback
+  - `J`/`L` adjust speed by `0.25x`
+  - `K` resets speed to `1x`
+  - `R` resolves selected comments (team/admin), with `↑`/`↓` keyboard navigation
+- Markup UX polish:
+  - "Draw annotation" terminology updated to "Mark"
+  - Pending mark preview and removable mark thumbnail in composer
+- Public/share comments automatically set video workflow status to `Rework`
+- Drag-and-drop in viewer now shows an explicit "Drop file here to attach" affordance and attaches directly to draft comments
+- Final Proof banner styling and readability improved for dark mode
+- Notion link modal is now responsive to viewport size and no longer overflows on smaller windows
+- Notion link add/remove notifications were repositioned to avoid overlapping action buttons
+- Notion "Proof" field sync now supports property names beyond exact `"Proof?"` (e.g., `"Proof"`)
+
 ## Infrastructure and Backend
 
 - Convex backend (queries, mutations, actions, internal cron jobs)
