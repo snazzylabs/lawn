@@ -195,8 +195,10 @@ export function DashboardHeader({
 
       {/* Children — second row on mobile, middle column on desktop */}
       {children && (
-        <div className="col-span-full pb-2 sm:pb-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 flex items-center gap-2 sm:gap-3 sm:justify-end sm:h-14 sm:pl-4 min-w-0">
-          {children}
+        <div className="col-span-full pb-2 sm:pb-0 sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:h-14 sm:pl-4 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 sm:justify-end min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {children}
+          </div>
         </div>
       )}
     </header>

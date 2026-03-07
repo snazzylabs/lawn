@@ -42,8 +42,8 @@ export function UploadButton({
       <Button onClick={handleClick} disabled={disabled}>
         {children || (
           <>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Upload
+            <Plus className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Upload</span>
           </>
         )}
       </Button>

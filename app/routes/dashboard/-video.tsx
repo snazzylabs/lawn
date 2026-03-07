@@ -154,7 +154,7 @@ export default function VideoPage() {
       const files = Array.from(event.dataTransfer?.files ?? []);
       if (files.length === 0) return;
 
-      if (window.matchMedia("(max-width: 1023px)").matches) {
+      if (window.matchMedia("(max-width: 767px)").matches) {
         setMobileCommentsOpen(true);
       }
 
@@ -230,7 +230,7 @@ export default function VideoPage() {
         if (isFinalCutVideo && !showDiscussionForFinalCut) {
           setShowDiscussionForFinalCut(true);
         }
-        if (window.matchMedia("(max-width: 1023px)").matches) {
+        if (window.matchMedia("(max-width: 767px)").matches) {
           setMobileCommentsOpen(true);
         }
         focusVisibleCommentInputSoon();
@@ -718,7 +718,7 @@ export default function VideoPage() {
           {isDiscussionVisible && (
             <Button
               variant="outline"
-              className="lg:hidden"
+              className="md:hidden"
               onClick={() => setMobileCommentsOpen(true)}
             >
               <MessageSquare className="h-4 w-4" />
@@ -950,7 +950,7 @@ export default function VideoPage() {
 
         {/* Comments sidebar — desktop */}
         {isDiscussionVisible && (
-          <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
+          <aside className="hidden md:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 dark:border-white/10 flex items-center justify-between">
               <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a] dark:text-[#f0f0e8]">
                 Discussion
@@ -1000,7 +1000,7 @@ export default function VideoPage() {
 
       {/* Comments overlay — mobile */}
       {isDiscussionVisible && mobileCommentsOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-[#f0f0e8]">
+        <div className="fixed inset-0 z-50 md:hidden flex flex-col bg-[#f0f0e8]">
           <div className="flex-shrink-0 px-5 py-4 border-b-2 border-[#1a1a1a] flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a]">
               Discussion

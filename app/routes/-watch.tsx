@@ -125,7 +125,7 @@ export default function WatchPage() {
           return;
         }
         setPendingCommentTimestamp(currentTimeRef.current);
-        if (window.matchMedia("(max-width: 1023px)").matches) {
+        if (window.matchMedia("(max-width: 767px)").matches) {
           setMobileCommentsOpen(true);
         }
         focusVisibleCommentInputSoon();
@@ -415,7 +415,7 @@ export default function WatchPage() {
   }, []);
 
   const handleMarkerClick = useCallback((commentId: string) => {
-    if (window.matchMedia("(max-width: 1023px)").matches) {
+    if (window.matchMedia("(max-width: 767px)").matches) {
       setMobileCommentsOpen(true);
       window.setTimeout(() => {
         scrollToComment(commentId);
@@ -797,7 +797,7 @@ export default function WatchPage() {
               className="inline-flex h-8 items-center gap-1.5 border-2 border-[color:var(--button-border)] bg-[color:var(--button-fill)] px-3 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--button-text)] shadow-[4px_4px_0px_0px_var(--shadow-accent)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:bg-[color:var(--button-fill-hover)] hover:shadow-[2px_2px_0px_0px_var(--shadow-accent)]"
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              Project
+              <span className="hidden sm:inline">Project</span>
             </a>
           ) : (
             <Link
@@ -823,10 +823,10 @@ export default function WatchPage() {
                 onClick={() => setIsEditingGuestIdentity((prev) => !prev)}
                 title="Edit reviewer name"
               >
-                <span className="flex flex-col items-start leading-tight">
-                  <span className="font-bold">{guest.name}</span>
+                <span className="flex max-w-[120px] flex-col items-start leading-tight">
+                  <span className="font-bold truncate w-full">{guest.name}</span>
                   {guest.company && (
-                    <span className="text-[10px] italic text-[#888]">{guest.company}</span>
+                    <span className="text-[10px] italic text-[#888] truncate w-full">{guest.company}</span>
                   )}
                 </span>
                 <UserRoundPen className="h-3 w-3" />
@@ -904,13 +904,23 @@ export default function WatchPage() {
                 }
               }}
             >
-              {reviewSubmitted ? "Review Submitted \u2713" : "Submit Review"}
+              {reviewSubmitted ? (
+                <>
+                  <span className="hidden sm:inline">Review Submitted ✓</span>
+                  <span className="sm:hidden">Submitted ✓</span>
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Submit Review</span>
+                  <span className="sm:hidden">Submit</span>
+                </>
+              )}
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
-            className="lg:hidden h-8"
+            className="md:hidden h-8"
             onClick={() => setMobileCommentsOpen(true)}
           >
             <MessageSquare className="h-4 w-4" />
@@ -1013,7 +1023,7 @@ export default function WatchPage() {
         </div>
 
         {/* Comments sidebar — desktop */}
-        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8]">
+        <aside className="hidden md:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8]">
           <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a]">
               Discussion
@@ -1045,7 +1055,7 @@ export default function WatchPage() {
 
       {/* Comments overlay — mobile */}
       {mobileCommentsOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-[#f0f0e8]">
+        <div className="fixed inset-0 z-50 md:hidden flex flex-col bg-[#f0f0e8]">
           <div className="flex-shrink-0 px-5 py-4 border-b-2 border-[#1a1a1a] flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a]">
               Discussion
