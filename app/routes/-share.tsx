@@ -751,7 +751,7 @@ export default function SharePage() {
       </div>
 
       {comment.replies.length > 0 ? (
-        <div className="mt-3 ml-9 border-l border-[#1a1a1a]/20 pl-3 space-y-2">
+        <div className="mt-3 ml-6 mr-2 border-l border-[#1a1a1a]/20 pl-3 sm:ml-9 sm:mr-0 space-y-2">
           {comment.replies.map((reply) => (
             <div
               key={reply._id}
@@ -853,7 +853,7 @@ export default function SharePage() {
       ) : null}
 
       {replyingToCommentId === comment._id && canComment && (
-        <div className="mt-3 ml-9">
+        <div className="mt-3 ml-6 mr-2 sm:ml-9 sm:mr-0">
           <CommentInput
             timestampSeconds={currentTime}
             onSubmitComment={handleSubmitComment}
@@ -949,7 +949,7 @@ export default function SharePage() {
               </div>
             )}
             <PublicThemeToggleButton />
-            <HelpButton />
+            <HelpButton variant="outline" className="h-10 w-10" />
             {canComment && (
               <Button
                 size="sm"
@@ -1055,7 +1055,7 @@ export default function SharePage() {
                 rangeMarker={rangeMarker ?? undefined}
                 pendingInPoint={pendingInPoint ?? undefined}
                 pendingCommentPoint={pendingCommentTimestamp ?? undefined}
-                defaultQualityHeight={720}
+                defaultQualityHeight={1080}
               />
               {drawingMode && (
                 <>

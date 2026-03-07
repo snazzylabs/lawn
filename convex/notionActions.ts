@@ -255,6 +255,15 @@ function normalizeSearchText(value: string) {
   return value.trim().toLowerCase();
 }
 
+function extractDateRangeText(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const date = value as Record<string, unknown>;
+  const start = typeof date.start === "string" ? date.start.trim() : "";
+  const end = typeof date.end === "string" ? date.end.trim() : "";
+  if (start && end) return `${start} - ${end}`;
+  return start || end;
+}
+
 function extractRichTextContent(value: unknown): string {
   if (!Array.isArray(value)) return "";
   return value
@@ -283,6 +292,12 @@ function extractPropertyText(property: Record<string, unknown> | undefined): str
     return typeof name === "string" ? name.trim() : "";
   }
 
+  if (type === "status") {
+    if (!rawValue || typeof rawValue !== "object") return "";
+    const name = (rawValue as Record<string, unknown>).name;
+    return typeof name === "string" ? name.trim() : "";
+  }
+
   if (type === "multi_select") {
     if (!Array.isArray(rawValue)) return "";
     return rawValue
@@ -293,6 +308,26 @@ function extractPropertyText(property: Record<string, unknown> | undefined): str
       })
       .filter((entry) => entry.length > 0)
       .join(", ");
+  }
+
+  if (type === "people") {
+    if (!Array.isArray(rawValue)) return "";
+    return rawValue
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return "";
+        const name = (entry as Record<string, unknown>).name;
+        return typeof name === "string" ? name.trim() : "";
+      })
+      .filter((entry) => entry.length > 0)
+      .join(", ");
+  }
+
+  if (type === "date") {
+    return extractDateRangeText(rawValue);
+  }
+
+  if (type === "checkbox") {
+    return typeof rawValue === "boolean" ? (rawValue ? "true" : "false") : "";
   }
 
   if (type === "url" || type === "email" || type === "phone_number") {
@@ -308,24 +343,47 @@ function extractPropertyText(property: Record<string, unknown> | undefined): str
     if (typeof formula.string === "string") return formula.string.trim();
     if (typeof formula.number === "number") return String(formula.number);
     if (typeof formula.boolean === "boolean") return formula.boolean ? "true" : "false";
+    if (formula.date && typeof formula.date === "object") {
+      return extractDateRangeText(formula.date);
+    }
+  }
+
+  if (type === "rollup" && rawValue && typeof rawValue === "object") {
+    const rollup = rawValue as Record<string, unknown>;
+    const rollupType = typeof rollup.type === "string" ? rollup.type : "";
+    if (rollupType === "number" && typeof rollup.number === "number") {
+      return String(rollup.number);
+    }
+    if (rollupType === "date") {
+      return extractDateRangeText(rollup.date);
+    }
+    if (rollupType === "array" && Array.isArray(rollup.array)) {
+      return rollup.array
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return "";
+          return extractPropertyText(entry as Record<string, unknown>);
+        })
+        .filter((entry) => entry.length > 0)
+        .join(", ");
+    }
   }
 
   return "";
 }
 
-function extractPropertyByName(
+function findPropertyByName(
   properties: Record<string, unknown> | undefined,
   propertyName: string,
 ) {
-  if (!properties || typeof properties !== "object") return "";
+  if (!properties || typeof properties !== "object") return undefined;
   const normalizedName = normalizePropertyName(propertyName);
 
   const entries = Object.entries(properties);
   const exact = entries.find(([name]) => normalizePropertyName(name) === normalizedName);
   if (exact) {
     const value = exact[1];
-    if (!value || typeof value !== "object") return "";
-    return extractPropertyText(value as Record<string, unknown>);
+    if (!value || typeof value !== "object") return undefined;
+    return value as Record<string, unknown>;
   }
 
   const fuzzy = entries.find(([name]) => {
@@ -334,11 +392,74 @@ function extractPropertyByName(
   });
   if (fuzzy) {
     const value = fuzzy[1];
-    if (!value || typeof value !== "object") return "";
-    return extractPropertyText(value as Record<string, unknown>);
+    if (!value || typeof value !== "object") return undefined;
+    return value as Record<string, unknown>;
   }
 
-  return "";
+  return undefined;
+}
+
+async function fetchNotionPageTitleById(notionApiKey: string, pageId: string) {
+  const normalizedPageId = normalizeNotionId(pageId);
+  const identifier = normalizedPageId || pageId.trim();
+  if (!identifier) return "";
+
+  try {
+    const response = await fetch(`${NOTION_API_BASE}/pages/${identifier}`, {
+      method: "GET",
+      headers: notionHeaders(notionApiKey),
+    });
+    if (!response.ok) {
+      return "";
+    }
+    const payload = (await response.json()) as Record<string, unknown>;
+    return extractNotionPageTitle(payload);
+  } catch {
+    return "";
+  }
+}
+
+async function extractSponsorText(
+  notionApiKey: string,
+  properties: Record<string, unknown> | undefined,
+  relationTitleCache: Map<string, string>,
+) {
+  const sponsorProperty = findPropertyByName(properties, "sponsor");
+  if (!sponsorProperty || typeof sponsorProperty !== "object") return "";
+
+  const directText = extractPropertyText(sponsorProperty);
+  if (directText) return directText;
+
+  const type =
+    typeof sponsorProperty.type === "string" ? sponsorProperty.type : "";
+  if (type !== "relation") return "";
+
+  const relationEntries = Array.isArray(sponsorProperty.relation)
+    ? sponsorProperty.relation
+    : [];
+  if (relationEntries.length === 0) return "";
+
+  const titles: string[] = [];
+  for (const relationEntry of relationEntries) {
+    if (!relationEntry || typeof relationEntry !== "object") continue;
+    const relationId = (relationEntry as Record<string, unknown>).id;
+    if (typeof relationId !== "string" || !relationId.trim()) continue;
+
+    const cacheKey = normalizeNotionId(relationId);
+    const cachedTitle = relationTitleCache.get(cacheKey);
+    if (cachedTitle !== undefined) {
+      if (cachedTitle) titles.push(cachedTitle);
+      continue;
+    }
+
+    const relationTitle = await fetchNotionPageTitleById(notionApiKey, relationId);
+    relationTitleCache.set(cacheKey, relationTitle);
+    if (relationTitle) {
+      titles.push(relationTitle);
+    }
+  }
+
+  return titles.join(", ");
 }
 
 function extractSponsorMatchTitle(sponsorText: string, query: string) {
@@ -486,6 +607,7 @@ async function searchPagesBySponsorField(
 
   const results: NotionSearchPageResult[] = [];
   const seenPageIds = new Set<string>();
+  const relationTitleCache = new Map<string, string>();
   let cursor: string | undefined;
 
   for (let page = 0; page < 10; page += 1) {
@@ -511,7 +633,11 @@ async function searchPagesBySponsorField(
         item.properties && typeof item.properties === "object"
           ? (item.properties as Record<string, unknown>)
           : undefined;
-      const sponsorText = extractPropertyByName(properties, "sponsor");
+      const sponsorText = await extractSponsorText(
+        notionApiKey,
+        properties,
+        relationTitleCache,
+      );
       const sponsorMatchTitle = extractSponsorMatchTitle(sponsorText, query);
       if (!sponsorMatchTitle) continue;
 

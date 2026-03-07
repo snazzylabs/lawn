@@ -17,7 +17,6 @@ import {
   VideoWorkflowStatusControl,
   type VideoWorkflowStatus,
 } from "@/components/videos/VideoWorkflowStatusControl";
-import { formatDuration } from "@/lib/utils";
 import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compositeDrawing";
 import { downloadFCPXML, downloadPremiereCSV, downloadDaVinciEDL } from "@/lib/nleExport";
 import { useVideoPresence } from "@/lib/useVideoPresence";
@@ -669,12 +668,6 @@ export default function VideoPage() {
         {/* Desktop: inline actions */}
         <div className="hidden lg:flex items-center gap-3 text-xs text-[#888]">
           <span className="truncate max-w-[100px]">{video.uploaderName}</span>
-          {video.duration && (
-            <>
-              <span className="text-[#ccc]">·</span>
-              <span className="font-mono">{formatDuration(video.duration)}</span>
-            </>
-          )}
           <VideoWatchers watchers={watchers} />
         </div>
         <div className="hidden sm:flex items-center gap-2 flex-shrink-0 border-l-2 border-[#1a1a1a]/20 pl-3 ml-1">
@@ -884,6 +877,7 @@ export default function VideoPage() {
                     setPreferredSource(id);
                   }
                 }}
+                defaultQualityHeight={1080}
               />
               {drawingMode && (
                 <>
@@ -951,7 +945,7 @@ export default function VideoPage() {
 
         {/* Comments sidebar — desktop */}
         {isDiscussionVisible && (
-          <aside className="hidden md:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
+          <aside className="hidden md:flex md:w-[22rem] lg:w-[24rem] xl:w-[26rem] border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8] overflow-hidden">
             <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 dark:border-white/10 flex items-center justify-between">
               <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a] dark:text-[#f0f0e8]">
                 Discussion

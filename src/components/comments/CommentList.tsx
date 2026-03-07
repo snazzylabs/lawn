@@ -270,7 +270,7 @@ export function CommentList({
                   onSelect={setActiveCommentId}
                 />
                 {comment.replies.length > 0 && (
-                  <div className="pl-14 pr-4 pb-4 space-y-4 relative">
+                  <div className="pl-10 pr-3 pb-4 sm:pl-14 sm:pr-4 space-y-4 relative">
                     <div className="absolute left-[1.35rem] top-0 bottom-6 w-px bg-[#1a1a1a]/10 dark:bg-white/10" />
                     {comment.replies.map((reply) => (
                       <CommentItem

@@ -348,7 +348,7 @@ export function CommentItem({
       </div>
 
       {isReplying && (
-        <div className="mt-3 ml-10">
+        <div className="mt-3 ml-6 mr-2 sm:ml-10 sm:mr-0">
           <CommentInput
             videoId={comment.videoId}
             timestampSeconds={comment.timestampSeconds}

@@ -13,7 +13,7 @@ import { useGuestIdentity } from "@/lib/useGuestIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { cn, formatDuration, formatTimestamp, formatRelativeTime, getInitials } from "@/lib/utils";
+import { cn, formatTimestamp, formatRelativeTime, getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AlertCircle, MessageSquare, X, Pencil, Trash2, CheckCircle2, FolderOpen, UserRoundPen } from "lucide-react";
 import { HelpButton } from "@/components/HelpDialog";
@@ -638,7 +638,7 @@ export default function WatchPage() {
         </div>
 
         {comment.replies.length > 0 ? (
-          <div className="mt-3 ml-9 border-l border-[#1a1a1a]/20 pl-3 space-y-2">
+          <div className="mt-3 ml-6 mr-2 border-l border-[#1a1a1a]/20 pl-3 sm:ml-9 sm:mr-0 space-y-2">
             {comment.replies.map((reply) => (
               <div
                 key={reply._id}
@@ -740,7 +740,7 @@ export default function WatchPage() {
         ) : null}
 
         {replyingToCommentId === comment._id && canComment && (
-          <div className="mt-3 ml-9">
+          <div className="mt-3 ml-6 mr-2 sm:ml-9 sm:mr-0">
             <CommentInput
               timestampSeconds={currentTime}
               onSubmitComment={handleSubmitComment}
@@ -872,14 +872,8 @@ export default function WatchPage() {
               )}
             </div>
           )}
-          {video.duration && (
-            <>
-              <span className="hidden sm:inline text-[#ccc]">·</span>
-              <span className="hidden sm:inline font-mono">{formatDuration(video.duration)}</span>
-            </>
-          )}
           <PublicThemeToggleButton />
-          <HelpButton />
+          <HelpButton variant="outline" className="h-10 w-10" />
           {canComment && (
             <Button
               size="sm"
@@ -981,7 +975,7 @@ export default function WatchPage() {
                 rangeMarker={rangeMarker ?? undefined}
                 pendingInPoint={pendingInPoint ?? undefined}
                 pendingCommentPoint={pendingCommentTimestamp ?? undefined}
-                defaultQualityHeight={720}
+                defaultQualityHeight={1080}
               />
               {drawingMode && (
                 <>
@@ -1023,7 +1017,7 @@ export default function WatchPage() {
         </div>
 
         {/* Comments sidebar — desktop */}
-        <aside className="hidden md:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8]">
+        <aside className="hidden md:flex md:w-[22rem] lg:w-[24rem] xl:w-[26rem] border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8]">
           <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a]">
               Discussion
