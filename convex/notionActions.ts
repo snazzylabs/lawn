@@ -282,8 +282,20 @@ function extractPropertyByName(
   if (!properties || typeof properties !== "object") return "";
   const normalizedName = normalizePropertyName(propertyName);
 
-  for (const [name, value] of Object.entries(properties)) {
-    if (normalizePropertyName(name) !== normalizedName) continue;
+  const entries = Object.entries(properties);
+  const exact = entries.find(([name]) => normalizePropertyName(name) === normalizedName);
+  if (exact) {
+    const value = exact[1];
+    if (!value || typeof value !== "object") return "";
+    return extractPropertyText(value as Record<string, unknown>);
+  }
+
+  const fuzzy = entries.find(([name]) => {
+    const normalized = normalizePropertyName(name);
+    return normalized.includes(normalizedName) || normalizedName.includes(normalized);
+  });
+  if (fuzzy) {
+    const value = fuzzy[1];
     if (!value || typeof value !== "object") return "";
     return extractPropertyText(value as Record<string, unknown>);
   }
@@ -376,6 +388,7 @@ async function queryNotionDatabaseLikeCollection(
   notionApiKey: string,
   normalizedDatabaseId: string,
   pageSize: number,
+  startCursor?: string,
 ) {
   const candidatePaths = [
     `${NOTION_API_BASE}/databases/${normalizedDatabaseId}/query`,
@@ -388,13 +401,18 @@ async function queryNotionDatabaseLikeCollection(
       headers: notionHeaders(notionApiKey),
       body: JSON.stringify({
         page_size: pageSize,
+        ...(startCursor ? { start_cursor: startCursor } : {}),
       }),
     });
 
     if (response.ok) {
       return {
         ok: true as const,
-        payload: (await response.json()) as { results?: Array<Record<string, unknown>> },
+        payload: (await response.json()) as {
+          results?: Array<Record<string, unknown>>;
+          has_more?: boolean;
+          next_cursor?: string | null;
+        },
       };
     }
 
@@ -428,46 +446,61 @@ async function searchPagesBySponsorField(
   const sponsorQuery = normalizeSearchText(query);
   if (!sponsorQuery) return [] as NotionSearchPageResult[];
 
-  const response = await queryNotionDatabaseLikeCollection(
-    notionApiKey,
-    normalizedDatabaseId,
-    Math.min(50, Math.max(pageSize, 20)),
-  );
-  if (!response.ok) {
-    return [] as NotionSearchPageResult[];
-  }
-
-  const rawResults = response.payload.results ?? [];
   const results: NotionSearchPageResult[] = [];
+  const seenPageIds = new Set<string>();
+  let cursor: string | undefined;
 
-  for (const item of rawResults) {
-    if (item.object !== "page") continue;
-    const pageId = typeof item.id === "string" ? item.id : null;
-    const url = typeof item.url === "string" ? item.url : null;
-    if (!pageId || !url) continue;
+  for (let page = 0; page < 10; page += 1) {
+    const response = await queryNotionDatabaseLikeCollection(
+      notionApiKey,
+      normalizedDatabaseId,
+      Math.min(100, Math.max(pageSize * 2, 20)),
+      cursor,
+    );
+    if (!response.ok) {
+      break;
+    }
 
-    const pageTitle = extractNotionPageTitle(item);
-    const properties =
-      item.properties && typeof item.properties === "object"
-        ? (item.properties as Record<string, unknown>)
+    const rawResults = response.payload.results ?? [];
+    for (const item of rawResults) {
+      if (item.object !== "page") continue;
+      const pageId = typeof item.id === "string" ? item.id : null;
+      const url = typeof item.url === "string" ? item.url : null;
+      if (!pageId || !url || seenPageIds.has(pageId)) continue;
+
+      const pageTitle = extractNotionPageTitle(item);
+      const properties =
+        item.properties && typeof item.properties === "object"
+          ? (item.properties as Record<string, unknown>)
+          : undefined;
+      const sponsorText = extractPropertyByName(properties, "sponsor");
+      const sponsorMatchTitle = extractSponsorMatchTitle(sponsorText, query);
+      if (!sponsorMatchTitle) continue;
+
+      const lastEditedTime =
+        typeof item.last_edited_time === "string"
+          ? item.last_edited_time
+          : undefined;
+
+      results.push({
+        pageId,
+        title: sponsorMatchTitle,
+        url,
+        lastEditedTime,
+        pageTitle,
+        matchedBy: "sponsor",
+      });
+      seenPageIds.add(pageId);
+    }
+
+    if (results.length >= pageSize * 3) break;
+    const hasMore = response.payload.has_more === true;
+    const nextCursor =
+      typeof response.payload.next_cursor === "string"
+        ? response.payload.next_cursor
         : undefined;
-    const sponsorText = extractPropertyByName(properties, "sponsor");
-    const sponsorMatchTitle = extractSponsorMatchTitle(sponsorText, query);
-    if (!sponsorMatchTitle) continue;
-
-    const lastEditedTime =
-      typeof item.last_edited_time === "string"
-        ? item.last_edited_time
-        : undefined;
-
-    results.push({
-      pageId,
-      title: sponsorMatchTitle,
-      url,
-      lastEditedTime,
-      pageTitle,
-      matchedBy: "sponsor",
-    });
+    if (!hasMore || !nextCursor) break;
+    cursor = nextCursor;
   }
 
   return results;

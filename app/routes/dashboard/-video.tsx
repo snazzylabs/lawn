@@ -692,6 +692,30 @@ export default function VideoPage() {
             <LinkIcon className="mr-1.5 h-4 w-4" />
             Share
           </Button>
+          {comments && comments.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  <Download className="mr-1.5 h-4 w-4" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => downloadFCPXML(comments, video?.title ?? "video")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export FCPXML
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => downloadPremiereCSV(comments, video?.title ?? "video")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Premiere CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => downloadDaVinciEDL(comments, video?.title ?? "video")}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export DaVinci EDL
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <HelpButton variant="outline" className="h-9 w-9" />
           {isDiscussionVisible && (
             <Button

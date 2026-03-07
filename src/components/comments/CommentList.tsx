@@ -240,7 +240,7 @@ export function CommentList({
               className={cn(
                 "px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide transition-colors",
                 filter === f.key
-                  ? "bg-[#1a1a1a] text-[#f0f0e8]"
+                  ? "bg-[#2F6DB4] text-white"
                   : "text-[#888] hover:text-[#1a1a1a]",
               )}
             >
@@ -293,6 +293,7 @@ export function CommentList({
                         isHighlighted={highlightedCommentId === reply._id}
                         isReply
                         canResolve={canResolve}
+                        inheritedResolved={comment.resolved}
                         onSubmitComment={onSubmitComment}
                         isActive={activeCommentId === reply._id}
                         onSelect={setActiveCommentId}

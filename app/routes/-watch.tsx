@@ -23,6 +23,7 @@ import { VideoWorkflowStatusControl } from "@/components/videos/VideoWorkflowSta
 import { compositeDrawingOnFrame, optimizeCommentDrawingData } from "@/lib/compositeDrawing";
 import { resolveAttachmentContentType } from "@/lib/attachments";
 import { OPEN_HELP_EVENT, focusVisibleCommentInputSoon, isTextEntryTarget } from "@/lib/commentHotkeys";
+import { PublicThemeToggleButton } from "@/components/theme/PublicThemeToggleButton";
 import { useWatchData } from "./-watch.data";
 
 export default function WatchPage() {
@@ -445,6 +446,7 @@ export default function WatchPage() {
         userAvatarUrl?: string;
         text: string;
         timestampSeconds: number;
+        resolved?: boolean;
         attachments?: Array<{
           _id?: string;
           filename: string;
@@ -465,7 +467,10 @@ export default function WatchPage() {
     };
 
     return (
-      <article key={comment._id} className={`border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3${comment.resolved ? " opacity-50" : ""}`}>
+      <article
+        key={comment._id}
+        className={`relative p-4 transition-colors hover:bg-[#1a1a1a]/5${comment.resolved ? " opacity-50" : ""}`}
+      >
         <div className="flex items-start gap-2.5">
           <Avatar className="h-7 w-7 shrink-0">
             <AvatarImage src={comment.userAvatarUrl} />
@@ -583,16 +588,26 @@ export default function WatchPage() {
         </div>
 
         {comment.replies.length > 0 ? (
-          <div className="mt-3 ml-9 border-l-2 border-[#1a1a1a] pl-3 space-y-2">
+          <div className="mt-3 ml-9 border-l border-[#1a1a1a]/20 pl-3 space-y-2">
             {comment.replies.map((reply) => (
-              <div key={reply._id} className="text-sm flex items-start gap-2">
+              <div
+                key={reply._id}
+                className={`text-sm flex items-start gap-2${comment.resolved || reply.resolved ? " opacity-50" : ""}`}
+              >
                 <Avatar className="h-6 w-6 shrink-0">
                   <AvatarImage src={reply.userAvatarUrl} />
                   <AvatarFallback className="text-[8px]">{getInitials(reply.userName)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
+                    <span className="font-bold text-[#1a1a1a]">
+                      {reply.userName}
+                      {(comment.resolved || reply.resolved) && (
+                        <span className="ml-1 text-[10px] font-bold uppercase tracking-wider text-[#888]">
+                          Resolved
+                        </span>
+                      )}
+                    </span>
                     <div className="flex items-center gap-2">
                       {reply.isGuestOwned && editingCommentId !== reply._id && (
                         <>
@@ -741,6 +756,7 @@ export default function WatchPage() {
               <span className="hidden sm:inline font-mono">{formatDuration(video.duration)}</span>
             </>
           )}
+          <PublicThemeToggleButton />
           <HelpButton />
           {canComment && (
             <Button
@@ -829,7 +845,7 @@ export default function WatchPage() {
                 rangeMarker={rangeMarker ?? undefined}
                 pendingInPoint={pendingInPoint ?? undefined}
                 pendingCommentPoint={pendingCommentTimestamp ?? undefined}
-                maxQualityHeight={!userId ? 720 : undefined}
+                defaultQualityHeight={720}
               />
               {drawingMode && (
                 <>
@@ -883,13 +899,13 @@ export default function WatchPage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto">
             {comments === undefined ? (
-              <p className="text-sm text-[#888]">Loading comments...</p>
+              <p className="p-4 text-sm text-[#888]">Loading comments...</p>
             ) : comments.length === 0 ? (
-              <p className="text-sm text-[#888]">No comments yet.</p>
+              <p className="p-4 text-sm text-[#888]">No comments yet.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="divide-y divide-[#1a1a1a]/10">
                 {comments.map((comment) => renderComment(comment))}
               </div>
             )}
@@ -923,13 +939,13 @@ export default function WatchPage() {
             </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto">
             {comments === undefined ? (
-              <p className="text-sm text-[#888]">Loading comments...</p>
+              <p className="p-4 text-sm text-[#888]">Loading comments...</p>
             ) : comments.length === 0 ? (
-              <p className="text-sm text-[#888]">No comments yet.</p>
+              <p className="p-4 text-sm text-[#888]">No comments yet.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="divide-y divide-[#1a1a1a]/10">
                 {comments.map((comment) =>
                   renderComment(comment, {
                     onSeek: () => setMobileCommentsOpen(false),

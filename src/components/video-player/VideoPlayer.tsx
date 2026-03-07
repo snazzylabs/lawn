@@ -76,6 +76,8 @@ interface VideoPlayerProps {
   pendingInPoint?: number;
   /** Temporary marker shown when comment timestamp is locked via hotkey. */
   pendingCommentPoint?: number;
+  /** Prefer this resolution on initial load when available (e.g. 720). */
+  defaultQualityHeight?: number;
   /** Cap auto-quality to this max height (e.g. 720 for guests). */
   maxQualityHeight?: number;
 }
@@ -138,6 +140,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     onRangeMarkerDrag,
     pendingInPoint,
     pendingCommentPoint,
+    defaultQualityHeight,
     maxQualityHeight,
   },
   ref
@@ -845,6 +848,31 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             setQualityOptions(nextOptions);
             setSelectedQualityLevel(AUTO_QUALITY_LEVEL);
 
+            if (defaultQualityHeight) {
+              const cappedDefaultLevel = hls.levels.reduce(
+                (best, lvl, i) =>
+                  lvl.height <= defaultQualityHeight &&
+                  (best === -1 || lvl.height > hls.levels[best].height)
+                    ? i
+                    : best,
+                -1,
+              );
+              const defaultLevel = cappedDefaultLevel !== -1
+                ? cappedDefaultLevel
+                : hls.levels.reduce(
+                  (best, lvl, i) =>
+                    best === -1 || lvl.height < hls.levels[best].height
+                      ? i
+                      : best,
+                  -1,
+                );
+              if (defaultLevel !== -1) {
+                hls.currentLevel = defaultLevel;
+                hls.nextLevel = defaultLevel;
+                setSelectedQualityLevel(defaultLevel);
+              }
+            }
+
             if (maxQualityHeight) {
               const cap = hls.levels.reduce(
                 (best, lvl, i) =>
@@ -924,7 +952,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, initialTime, onTimeUpdate, showControls, updateBuffered]);
+  }, [
+    src,
+    initialTime,
+    onTimeUpdate,
+    showControls,
+    updateBuffered,
+    defaultQualityHeight,
+    maxQualityHeight,
+  ]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

@@ -61,6 +61,7 @@ interface CommentItemProps {
     userIdentifiers: string[];
     userNames?: string[];
   }>;
+  inheritedResolved?: boolean;
   currentUserIdentifier?: string;
   currentUserName?: string;
   onSubmitComment?: (args: {
@@ -87,6 +88,7 @@ export function CommentItem({
   isReply = false,
   canResolve = false,
   reactions,
+  inheritedResolved = false,
   currentUserIdentifier,
   currentUserName,
   onSubmitComment,
@@ -107,6 +109,7 @@ export function CommentItem({
 
   const isOwnComment = currentUserClerkId && comment.userClerkId === currentUserClerkId;
   const isRange = comment.endTimestampSeconds !== undefined;
+  const isResolved = comment.resolved || inheritedResolved;
 
   useEffect(() => {
     if (isEditing && editTextRef.current) {
@@ -197,7 +200,7 @@ export function CommentItem({
         isHighlighted
           ? "bg-[#2F6DB4]/10"
           : "hover:bg-[#1a1a1a]/5",
-        comment.resolved && "opacity-50",
+        isResolved && "opacity-50",
         isActive && "bg-[#2F6DB4]/15 outline outline-1 outline-[#2F6DB4]"
       )}
       onClick={() => onSelect?.(comment._id)}
@@ -234,16 +237,10 @@ export function CommentItem({
                     Edit
                   </DropdownMenuItem>
                 )}
-                {!isReply && (
-                  <DropdownMenuItem onClick={() => setIsReplying(true)}>
-                    <Reply className="mr-2 h-4 w-4" />
-                    Reply
-                  </DropdownMenuItem>
-                )}
                 {canResolve && !isReply && (
                   <DropdownMenuItem onClick={handleToggleResolved}>
                     <Check className="mr-2 h-4 w-4" />
-                    {comment.resolved ? "Unresolve" : "Resolve"}
+                    {isResolved ? "Unresolve" : "Resolve"}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -269,7 +266,7 @@ export function CommentItem({
                 <Pencil className="h-3 w-3" />
               </span>
             )}
-            {comment.resolved && (
+            {isResolved && (
               <Badge variant="success" className="text-[10px] shrink-0">
                 Resolved
               </Badge>
@@ -340,9 +337,21 @@ export function CommentItem({
                 />
               )}
               <CommentAttachments attachments={comment.attachments} />
-              <p className="text-[11px] text-[#888] mt-1">
-                {formatRelativeTime(comment._creationTime)}
-              </p>
+              <div className="mt-1 flex items-center gap-3">
+                <p className="text-[11px] text-[#888]">
+                  {formatRelativeTime(comment._creationTime)}
+                </p>
+                {!isReply && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#2F6DB4] hover:text-[#1a1a1a]"
+                    onClick={() => setIsReplying((prev) => !prev)}
+                  >
+                    <Reply className="h-3 w-3" />
+                    Reply
+                  </button>
+                )}
+              </div>
               {currentUserIdentifier && currentUserName && (
                 <div className="mt-1.5">
                   <EmojiReactionPicker
