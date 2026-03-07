@@ -274,7 +274,7 @@ export const setNotionPage = mutation({
     notionPageUrl: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    await requireProjectAccess(ctx, args.projectId, "member");
+    const { project } = await requireProjectAccess(ctx, args.projectId, "member");
 
     const normalized = normalizeNotionPageInput(args.notionPageInput);
     await ctx.db.patch(args.projectId, {
@@ -288,6 +288,20 @@ export const setNotionPage = mutation({
         notionPageId: normalized.notionPageId,
         projectUrl: args.projectUrl,
       });
+    }
+
+    const linkedToNewNotionPage =
+      Boolean(normalized.notionPageId) &&
+      normalized.notionPageId !== project.notionPageId;
+    if (linkedToNewNotionPage) {
+      try {
+        await ctx.scheduler.runAfter(0, internal.notionActions.notifyProjectProofUploaded, {
+          projectId: args.projectId,
+          source: "notion_linked",
+        });
+      } catch (error) {
+        console.error("Failed to schedule Notion proof upload notification on link", error);
+      }
     }
 
     return normalized;

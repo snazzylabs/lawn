@@ -176,6 +176,15 @@ export const create = mutation({
     });
 
     await touchProjectActivity(ctx, args.projectId);
+    try {
+      await ctx.scheduler.runAfter(0, internal.notionActions.notifyProjectProofUploaded, {
+        projectId: args.projectId,
+        videoId,
+        source: "upload",
+      });
+    } catch (error) {
+      console.error("Failed to schedule Notion proof upload notification", error);
+    }
 
     return videoId;
   },
@@ -229,6 +238,17 @@ export const getById = internalQuery({
   args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.videoId);
+  },
+});
+
+export const getLatestByProject = internalQuery({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("videos")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .first();
   },
 });
 

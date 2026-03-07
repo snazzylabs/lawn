@@ -8,7 +8,8 @@ import { Doc } from "./_generated/dataModel";
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 const DEFAULT_COMMENT_NOTIFY_COOLDOWN_MINUTES = 180;
-const DEFAULT_NOTION_MENTION_NAMES = ["benjamin carroll", "quinn nelson"];
+const DEFAULT_COMMENT_MENTION_NAMES = ["benjamin carroll", "quinn nelson"];
+const DEFAULT_PROOF_UPLOAD_MENTION_NAMES = ["xochitl irvine"];
 
 function getNotionApiKey() {
   return process.env.NOTION_API_KEY ?? process.env.NOTION_TOKEN ?? null;
@@ -45,6 +46,18 @@ function getMentionUserIds() {
   ])];
 }
 
+function getProofNotifyUserIds() {
+  const explicit = (process.env.NOTION_PROOF_NOTIFY_USER_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  const xochitl = process.env.NOTION_XOCHITL_USER_ID?.trim();
+  return [...new Set([
+    ...explicit,
+    ...(xochitl ? [xochitl] : []),
+  ])];
+}
+
 function normalizeMentionName(value: string) {
   return value
     .trim()
@@ -52,13 +65,19 @@ function normalizeMentionName(value: string) {
     .replace(/\s+/g, " ");
 }
 
-async function resolveMentionUserIds(notionApiKey: string) {
-  const explicitUserIds = getMentionUserIds();
+async function resolveMentionUserIdsByNames(
+  notionApiKey: string,
+  options: {
+    explicitUserIds: string[];
+    preferredNames: string[];
+  },
+) {
+  const explicitUserIds = options.explicitUserIds;
   if (explicitUserIds.length > 0) {
     return explicitUserIds;
   }
 
-  const targetNames = new Set(DEFAULT_NOTION_MENTION_NAMES.map(normalizeMentionName));
+  const targetNames = new Set(options.preferredNames.map(normalizeMentionName));
   const matched = new Map<string, string>();
   let cursor: string | undefined;
 
@@ -90,8 +109,13 @@ async function resolveMentionUserIds(notionApiKey: string) {
       const userName = typeof user.name === "string" ? user.name : "";
       if (!userId || !userName) continue;
       const normalizedUserName = normalizeMentionName(userName);
-      if (!targetNames.has(normalizedUserName)) continue;
-      matched.set(normalizedUserName, userId);
+      const matchedName = [...targetNames].find((name) =>
+        normalizedUserName === name ||
+        normalizedUserName.includes(name) ||
+        name.includes(normalizedUserName),
+      );
+      if (!matchedName) continue;
+      matched.set(matchedName, userId);
     }
 
     if (matched.size >= targetNames.size) break;
@@ -105,9 +129,23 @@ async function resolveMentionUserIds(notionApiKey: string) {
     cursor = nextCursor;
   }
 
-  return DEFAULT_NOTION_MENTION_NAMES
+  return options.preferredNames
     .map((name) => matched.get(normalizeMentionName(name)))
     .filter((value): value is string => Boolean(value));
+}
+
+async function resolveMentionUserIds(notionApiKey: string) {
+  return resolveMentionUserIdsByNames(notionApiKey, {
+    explicitUserIds: getMentionUserIds(),
+    preferredNames: DEFAULT_COMMENT_MENTION_NAMES,
+  });
+}
+
+async function resolveProofNotifyMentionUserIds(notionApiKey: string) {
+  return resolveMentionUserIdsByNames(notionApiKey, {
+    explicitUserIds: getProofNotifyUserIds(),
+    preferredNames: DEFAULT_PROOF_UPLOAD_MENTION_NAMES,
+  });
 }
 
 type NotionRichText =
@@ -641,6 +679,137 @@ export const searchPagesForProject = action({
         filteredToDatabase: Boolean(normalizedDatabaseId),
         reason: "notion_request_failed",
       };
+    }
+  },
+});
+
+export const notifyProjectProofUploaded = internalAction({
+  args: {
+    projectId: v.id("projects"),
+    videoId: v.optional(v.id("videos")),
+    source: v.union(v.literal("upload"), v.literal("notion_linked")),
+  },
+  returns: v.object({
+    ok: v.boolean(),
+    skipped: v.boolean(),
+    reason: v.optional(v.string()),
+  }),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ ok: boolean; skipped: boolean; reason?: string }> => {
+    const notionApiKey = getNotionApiKey();
+    if (!notionApiKey) {
+      return {
+        ok: false,
+        skipped: true,
+        reason: "missing_notion_api_key",
+      };
+    }
+
+    const project: Doc<"projects"> | null = await ctx.runQuery(internal.projects.getById, {
+      projectId: args.projectId,
+    });
+    if (!project) {
+      return { ok: false, skipped: true, reason: "project_missing" };
+    }
+    if (!project.notionPageId) {
+      return { ok: false, skipped: true, reason: "project_not_linked" };
+    }
+
+    const video: Doc<"videos"> | null = args.videoId
+      ? await ctx.runQuery(internal.videos.getById, {
+        videoId: args.videoId,
+      })
+      : await ctx.runQuery(internal.videos.getLatestByProject, {
+        projectId: args.projectId,
+      });
+    if (!video || video.projectId !== args.projectId) {
+      return { ok: false, skipped: true, reason: "video_missing" };
+    }
+
+    const mentionUserIds = await resolveProofNotifyMentionUserIds(notionApiKey);
+    const appBaseUrl = getAppBaseUrl();
+    const deepLink =
+      appBaseUrl && video.publicId
+        ? `${appBaseUrl.replace(/\/$/, "")}/watch/${video.publicId}`
+        : null;
+
+    const richText: NotionRichText[] = [
+      {
+        type: "text",
+        text: {
+          content: `New client proof uploaded: "${video.title}". `,
+        },
+      },
+    ];
+
+    if (mentionUserIds.length > 0) {
+      mentionUserIds.forEach((userId, index) => {
+        richText.push({
+          type: "mention",
+          mention: {
+            type: "user",
+            user: { id: userId },
+          },
+        });
+        if (index < mentionUserIds.length - 1) {
+          richText.push({
+            type: "text",
+            text: { content: " " },
+          });
+        }
+      });
+    } else {
+      richText.push({
+        type: "text",
+        text: { content: "@Xochitl Irvine" },
+      });
+    }
+
+    if (args.source === "notion_linked") {
+      richText.push({
+        type: "text",
+        text: {
+          content: " (Notion page was just linked to this project.)",
+        },
+      });
+    }
+
+    if (deepLink) {
+      richText.push({
+        type: "text",
+        text: { content: `\n${deepLink}` },
+      });
+    }
+
+    try {
+      const response: Response = await fetch(`${NOTION_API_BASE}/comments`, {
+        method: "POST",
+        headers: notionHeaders(notionApiKey),
+        body: JSON.stringify({
+          parent: {
+            page_id: project.notionPageId,
+          },
+          rich_text: richText,
+        }),
+      });
+
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.error("Failed to post Notion proof upload comment", {
+          status: response.status,
+          response: responseText,
+          projectId: args.projectId,
+          videoId: video._id,
+        });
+        return { ok: false, skipped: false, reason: `notion_http_${response.status}` };
+      }
+
+      return { ok: true, skipped: false };
+    } catch (error) {
+      console.error("Notion proof upload notification failed", error);
+      return { ok: false, skipped: false, reason: "notion_request_failed" };
     }
   },
 });
